@@ -1,0 +1,6 @@
+classes: ['car', 'two_wheeler', 'auto_rickshaw', 'e_autorickshaw', 'e_rickshaw', 'bus', 'electric_bus', 'truck', 'tractor', 'cycle', 'pedestrian']
+img_size: 640
+train_path: data/train_images
+val_path: data/val_images
+batch_size: 16
+epochs: 50

@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+temp_frame.jpg
+output.json
+models/*.pt
+data/raw_videos/
