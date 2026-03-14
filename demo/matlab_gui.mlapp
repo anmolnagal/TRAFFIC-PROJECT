@@ -1,0 +1,150 @@
+classdef matlab_gui < matlab.apps.AppBase
+
+    % Properties
+    properties (Access = public)
+        UIFigure                matlab.ui.Figure
+        OriginalAxes            matlab.ui.control.UIAxes
+        AnnotatedAxes           matlab.ui.control.UIAxes
+        LoadButton              matlab.ui.control.UIButton
+        DetectButton            matlab.ui.control.UIButton
+        SaveButton              matlab.ui.control.UIButton
+        StatusLabel             matlab.ui.control.UILabel
+        CurrentImage            uint8
+        CurrentVideo            
+        FrameIdx = 1
+        Results                 struct
+    end
+
+    % Callbacks
+    methods (Access = private)
+
+        function startupFcn(app)
+            app.StatusLabel.Text = 'Ready. Click "Load Video/Image".';
+        end
+
+        function LoadButtonPushed(app, event)
+            [filename, pathname] = uigetfile({'*.jpg;*.png;*.jpeg;*.mp4;*.avi', 'Image/Video Files'});
+            if isequal(filename, 0), return; end
+            
+            fullpath = fullfile(pathname, filename);
+            if contains(filename, '.mp4') || contains(filename, '.avi')
+                app.CurrentVideo = VideoReader(fullpath);
+                app.CurrentImage = read(app.CurrentVideo, 1);
+                app.FrameIdx = 1;
+                app.StatusLabel.Text = sprintf('Video loaded: %d frames', app.CurrentVideo.NumFrames);
+            else
+                app.CurrentImage = imread(fullpath);
+                app.StatusLabel.Text = sprintf('Image loaded: %s', filename);
+            end
+            
+            imshow(app.CurrentImage, 'Parent', app.OriginalAxes);
+        end
+
+        function DetectButtonPushed(app, event)
+            if isempty(app.CurrentImage)
+                app.StatusLabel.Text = 'Load image/video first!';
+                return;
+            end
+            
+            % Save temporary frame
+            imwrite(app.CurrentImage, 'temp_frame.jpg');
+            
+            % Call Python inference
+            [status, ~] = system('python src/infer_single_frame.py temp_frame.jpg output.json');
+            
+            if status ~= 0
+                app.StatusLabel.Text = 'Error: Python script failed. Check paths/venv.';
+                return;
+            end
+            
+            % Load results
+            fid = fopen('output.json', 'r');
+            raw = fread(fid, '*char')';
+            fclose(fid);
+            app.Results = jsondecode(raw);
+            
+            % Annotate and display
+            annotated = app.annotate_frame(app.CurrentImage, app.Results.bboxes, app.Results.classes, app.Results.confs);
+            imshow(annotated, 'Parent', app.AnnotatedAxes);
+            app.StatusLabel.Text = sprintf('Detected %d vehicles', length(app.Results.bboxes));
+        end
+
+        function annotated = annotate_frame(app, img, bboxes, classes, confs)
+            annotated = img;
+            hold(app.AnnotatedAxes, 'on');
+            colors = [1 0 0; 0 1 0; 0 0 1; 1 1 0; 1 0 1; 0 1 1];  % RGB
+            
+            for i = 1:length(bboxes)
+                x1 = bboxes{i}(1); y1 = bboxes{i}(2);
+                x2 = bboxes{i}(3); y2 = bboxes{i}(4);
+                
+                % Draw bounding box
+                rectangle('Position', [x1 y1 x2-x1 y2-y1], ...
+                         'EdgeColor', colors(mod(i-1,6)+1,:), ...
+                         'LineWidth', 3, ...
+                         'Parent', app.AnnotatedAxes);
+                
+                % Add label
+                text(x1, y1-15, sprintf('%s (%.2f)', classes{i}, confs{i}), ...
+                    'Color', 'white', 'FontSize', 14, 'FontWeight', 'bold', ...
+                    'BackgroundColor', 'black', 'Parent', app.AnnotatedAxes);
+            end
+            hold(app.AnnotatedAxes, 'off');
+        end
+
+        function SaveButtonPushed(app, event)
+            if isempty(app.Results)
+                app.StatusLabel.Text = 'Run detection first!';
+                return;
+            end
+            
+            [filename, pathname] = uiputfile('*.jpg', 'Save annotated image');
+            if isequal(filename, 0), return; end
+            
+            annotated = app.annotate_frame(app.CurrentImage, app.Results.bboxes, app.Results.classes, app.Results.confs);
+            imwrite(annotated, fullfile(pathname, filename));
+            app.StatusLabel.Text = sprintf('Saved: %s', filename);
+        end
+
+    end
+
+    methods (Access = public)
+        function app = matlab_gui
+            createUIFigure(app);
+        end
+    end
+end
+
+% Auto-generated layout (adjust in App Designer)
+function createUIFigure(app)
+    app.UIFigure = uifigure;
+    app.UIFigure.Position = [100 100 1300 600];
+    
+    % Axes
+    app.OriginalAxes = uiaxes(app.UIFigure);
+    app.OriginalAxes.Position = [50 200 600 400];
+    title(app.OriginalAxes, 'Original Frame');
+    
+    app.AnnotatedAxes = uiaxes(app.UIFigure);
+    app.AnnotatedAxes.Position = [700 200 600 400];
+    title(app.AnnotatedAxes, 'Detected Vehicles');
+    
+    % Buttons
+    app.LoadButton = uibutton(app.UIFigure, 'push');
+    app.LoadButton.Position = [50 100 150 40];
+    app.LoadButton.Text = 'Load Video/Image';
+    app.LoadButton.ButtonPushedFcn = createCallbackFcn(app, @LoadButtonPushed);
+    
+    app.DetectButton = uibutton(app.UIFigure, 'push');
+    app.DetectButton.Position = [220 100 150 40];
+    app.DetectButton.Text = 'Run Detection';
+    app.DetectButton.ButtonPushedFcn = createCallbackFcn(app, @DetectButtonPushed);
+    
+    app.SaveButton = uibutton(app.UIFigure, 'push');
+    app.SaveButton.Position = [390 100 150 40];
+    app.SaveButton.Text = 'Save Result';
+    app.SaveButton.ButtonPushedFcn = createCallbackFcn(app, @SaveButtonPushed);
+    
+    app.StatusLabel = uilabel(app.UIFigure);
+    app.StatusLabel.Position = [50 50 1200 22];
+end
