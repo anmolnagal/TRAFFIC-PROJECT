@@ -11,7 +11,7 @@ def download_sample():
     os.makedirs(test_images_dir, exist_ok=True)
 
     # Sample traffic image (public domain)
-    url = "https://github.com/ultralytics/assets/raw/main/traffic.jpg"
+    url = "https://raw.githubusercontent.com/ultralytics/yolov5/master/data/images/bus.jpg"
     print(f"⬇️  Downloading sample image from {url} ...")
     r = requests.get(url, timeout=30)
     r.raise_for_status()
