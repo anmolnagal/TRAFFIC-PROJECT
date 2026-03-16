@@ -1,9 +1,12 @@
 import numpy as np
+import torch
+import torch.nn as nn
+from torchvision.models import resnet18
 from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler
 import joblib
-import torch.nn as nn
-from torchvision.models import resnet18
+from preprocessing import preprocess_image
+from frequency_features import extract_freq_features
 
 class FeatureExtractor(nn.Module):
     def __init__(self):
@@ -29,14 +32,15 @@ def get_cnn_features(roi):
 
 def train_fusion(X_cnn, X_freq, y):
     """Train SVM on concatenated features."""
-    scaler = StandardScaler()
-    X_cnn = scaler.fit_transform(X_cnn)
-    X_freq = scaler.transform(X_freq)  # Same scaler
+    # Use a single scaler fitted on the full fused feature vector
     X_fused = np.hstack([X_cnn, X_freq])
+    scaler = StandardScaler()
+    X_fused_scaled = scaler.fit_transform(X_fused)
     clf = SVC(kernel='rbf', probability=True)
-    clf.fit(X_fused, y)
+    clf.fit(X_fused_scaled, y)
     joblib.dump(clf, 'models/fusion_classifier.pkl')
     joblib.dump(scaler, 'models/scaler.pkl')
+    print("✅ Fusion classifier and scaler saved.")
 
 def predict_fusion(bboxes, classes, confs, img):
     """Inference: extract feats for detected ROIs, classify."""

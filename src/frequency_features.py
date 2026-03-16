@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 from scipy.fft import fft2, fftshift
 from skimage.filters import gabor
