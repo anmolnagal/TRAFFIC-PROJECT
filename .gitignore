@@ -65,6 +65,7 @@ data/val_images/
 data/test_images/
 !data/test_images/sample_traffic.jpg
 !data/test_images/bus.jpg
+data/yolov8n.pt
 
 # Logs
 *.log
