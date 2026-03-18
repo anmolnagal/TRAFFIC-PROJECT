@@ -53,6 +53,62 @@ This project proposes a **hybrid computer vision framework** that combines:
 
 ---
 
+## ▶️ Run it (Windows / PowerShell)
+
+### Install
+
+```bash
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### Quick demo (download sample + test pipeline)
+
+```bash
+python demo\download_sample_data.py
+python demo\test_pipeline.py
+```
+
+### Launch the Python GUI (Gradio)
+
+```bash
+python demo\python_gui.py
+```
+
+### Run single-image inference (writes JSON)
+
+```bash
+python src\infer_single_frame.py data\test_images\sample_traffic.jpg output.json
+```
+
+### Train YOLOv8 on your dataset (optional)
+
+1. Put your YOLO dataset under:
+   - `data/train_images`, `data/val_images`
+   - labels either next to images (`.txt` beside each `.jpg`) **or** in `data/train_labels`, `data/val_labels`
+2. Update `configs/dataset.yaml` if needed.
+
+Then run:
+
+```bash
+python -c "import sys; sys.path.insert(0,'src'); from cnn_detector import train_cnn; train_cnn('configs/dataset.yaml', epochs=50)"
+```
+
+### Evaluate (requires YOLO `.txt` labels for validation images)
+
+If your validation labels live in a separate folder, add this to `configs/config.yaml`:
+
+```yaml
+val_labels_path: data/val_labels
+```
+
+Then run:
+
+```bash
+python src\run_evaluater.py
+```
 
 ## 🏁 Expected Outcomes
 The integrated feature representation aims to significantly improve vehicle identification performance in adverse conditions such as:

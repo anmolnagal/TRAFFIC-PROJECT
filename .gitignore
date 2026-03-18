@@ -55,8 +55,11 @@ models/*.pkl
 
 # Project Temporary Files
 temp_frame.jpg
+temp_gui_frame.jpg
 output.json
 evaluation_report.json
+confusion_matrix.png
+.gradio/
 
 # Data (Large datasets/videos - redownload)
 data/raw_videos/

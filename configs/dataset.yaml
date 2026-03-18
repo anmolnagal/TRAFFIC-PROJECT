@@ -1,0 +1,26 @@
+path: data
+train: train_images
+val: val_images
+
+# If you have labels, create:
+# - data/train_labels/*.txt
+# - data/val_labels/*.txt
+# in YOLO format (class x_center y_center width height) normalized to [0,1].
+#
+# If your labels live next to images (same folder), you can instead set:
+# train: train_images
+# val: val_images
+# and ensure .txt files sit next to each .jpg with the same base name.
+
+names:
+  0: car
+  1: two_wheeler
+  2: auto_rickshaw
+  3: e_autorickshaw
+  4: e_rickshaw
+  5: bus
+  6: electric_bus
+  7: truck
+  8: tractor
+  9: cycle
+  10: pedestrian

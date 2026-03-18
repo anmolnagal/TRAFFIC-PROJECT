@@ -12,14 +12,14 @@ def download_sample():
 
     # Sample traffic image (public domain)
     url = "https://raw.githubusercontent.com/ultralytics/yolov5/master/data/images/bus.jpg"
-    print(f"⬇️  Downloading sample image from {url} ...")
+    print(f"Downloading sample image from {url} ...")
     r = requests.get(url, timeout=30)
     r.raise_for_status()
 
     out_path = os.path.join(test_images_dir, 'sample_traffic.jpg')
     with open(out_path, 'wb') as f:
         f.write(r.content)
-    print(f"✅ Downloaded sample image → {out_path}")
+    print(f"Downloaded sample image -> {out_path}")
 
 if __name__ == '__main__':
     download_sample()

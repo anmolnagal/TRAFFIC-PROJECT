@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from torchvision.models import resnet18
+from torchvision.models import ResNet18_Weights, resnet18
 from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler
 import joblib
@@ -11,7 +11,7 @@ from frequency_features import extract_freq_features
 class FeatureExtractor(nn.Module):
     def __init__(self):
         super().__init__()
-        backbone = resnet18(pretrained=True)
+        backbone = resnet18(weights=ResNet18_Weights.DEFAULT)
         self.backbone = nn.Sequential(*list(backbone.children())[:-2])  # Remove FC, avgpool for 512 feat
         self.pool = nn.AdaptiveAvgPool2d(1)
     

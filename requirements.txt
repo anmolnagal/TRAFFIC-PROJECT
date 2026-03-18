@@ -1,10 +1,17 @@
-torch==2.1.0
-torchvision==0.16.0
-ultralytics==8.1.0  # YOLOv8
+# Torch pins can easily break on Windows due to transitive deps (e.g. Ultralytics/Transformers).
+# Use a modern compatible range instead of a hard pin.
+torch>=2.2.0
+torchvision>=0.17.0
+ultralytics==8.1.0  # YOLOv8 (kept lightweight; runtime patches handle newer PyTorch)
 opencv-python==4.8.1.78
 numpy==1.24.3
 scikit-learn==1.3.0
 scipy==1.11.3
+scikit-image==0.22.0
 pyyaml==6.0.1
 flask==2.3.3  # Optional
 matplotlib==3.7.2
+gradio==4.44.1
+requests==2.32.3
+huggingface-hub==0.24.7
+pydantic==2.10.6
