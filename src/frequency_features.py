@@ -11,7 +11,8 @@ def fft_features(roi):
     low_freq = np.mean(f[:center, :center])  # Low freq energy
     high_freq = np.mean(f[center:, center:])  # High freq (texture)
     total_energy = np.sum(f)
-    return np.array([low_freq, high_freq, total_energy, np.var(f)])
+    features = np.array([low_freq, high_freq, total_energy, np.var(f)])
+    return np.nan_to_num(features)
 
 def gabor_features(roi, num_orient=4):
     """Gabor filter responses."""
@@ -20,7 +21,7 @@ def gabor_features(roi, num_orient=4):
     for theta in np.linspace(0, np.pi, num_orient):
         filt_real, _ = gabor(gray, frequency=0.6, theta=theta)
         features.append(np.mean(filt_real))
-    return np.array(features)
+    return np.nan_to_num(np.array(features))
 
 def extract_freq_features(roi):
     """Full frequency vector."""

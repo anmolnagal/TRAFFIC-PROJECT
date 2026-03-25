@@ -23,3 +23,14 @@ if __name__ == '__main__':
     }
     with open(out_json, 'w') as f:
         json.dump(results, f)
+        
+    # Draw boxes
+    for (x1, y1, x2, y2), cls, conf in zip(bboxes, classes, confs):
+        cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        label = f"{cls} {conf:.2f}"
+        cv2.putText(img, label, (x1, max(y1-10, 0)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+    
+    out_img_path = img_path.replace(".jpg", "_result.jpg").replace(".png", "_result.png")
+    cv2.imwrite(out_img_path, img)
+    print(f"✅ Inference complete. JSON saved to {out_json}")
+    print(f"📊 Visualization saved to {out_img_path}")

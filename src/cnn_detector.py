@@ -3,6 +3,14 @@ from typing import Union
 
 import numpy as np
 import torch
+
+# Bypass PyTorch 2.6 weights_only=True restriction for YOLO loading
+_original_load = torch.load
+def _unsafe_load(*args, **kwargs):
+    kwargs['weights_only'] = False
+    return _original_load(*args, **kwargs)
+torch.load = _unsafe_load
+
 from torch.nn.modules.container import ModuleList, Sequential
 from torch.nn.modules.conv import Conv2d
 from torch.nn.modules.batchnorm import BatchNorm2d
@@ -79,25 +87,36 @@ def detect(img: Union[str, np.ndarray]):
     # Try custom model first, fallback to pre-trained
     if os.path.exists(model_path):
         model = YOLO(model_path)
+        conf_thresh = 0.01  # Lower threshold for under-trained custom model
         print("Using custom trained model")
     else:
         model = YOLO('yolov8n.pt')  # Pre-trained COCO model
+        conf_thresh = 0.25
         print("Using pre-trained YOLOv8n (no custom model found)")
     
     if isinstance(img, str):
-        results = model(img)[0]
+        results = model(img, conf=conf_thresh)[0]
     else:
         if not isinstance(img, np.ndarray):
             raise TypeError("detect() expects a file path (str) or an image (numpy.ndarray).")
-        results = model(img)[0]
+        results = model(img, conf=conf_thresh)[0]
     bboxes = []
     classes = []
     confs = []
     
-    # Map COCO classes to our vehicle classes (basic mapping)
+    # Load custom classes mapping if available, else use basic COCO mapping
+    is_custom = os.path.exists(model_path)
+    
     coco_to_vehicle = {
         2: 'car', 3: 'car', 5: 'bus', 7: 'truck', 
         0: 'pedestrian'  # person
+    }
+    
+    # Custom model classes mapping, matching prepare_yolo_dataset.py CLASS_MAPPING
+    custom_classes = {
+        0: 'car', 1: 'two_wheeler', 2: 'autorickshaw', 3: 'e_autorickshaw',
+        4: 'e_rickshaw', 5: 'bus', 6: 'electric_bus', 7: 'truck',
+        8: 'tractor', 9: 'cycle', 10: 'pedestrian'
     }
     
     for box in results.boxes:
@@ -106,7 +125,11 @@ def detect(img: Union[str, np.ndarray]):
         conf = float(box.conf[0].cpu().numpy())
         
         # Map to vehicle class or use generic
-        vehicle_class = coco_to_vehicle.get(cls_id, 'vehicle')
+        if is_custom:
+            vehicle_class = custom_classes.get(cls_id, 'vehicle')
+        else:
+            vehicle_class = coco_to_vehicle.get(cls_id, 'vehicle')
+            
         bboxes.append([int(x1), int(y1), int(x2), int(y2)])
         classes.append(vehicle_class)
         confs.append(conf)

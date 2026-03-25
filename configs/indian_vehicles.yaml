@@ -1,0 +1,15 @@
+names:
+  0: car
+  1: two_wheeler
+  2: autorickshaw
+  3: e_autorickshaw
+  4: e_rickshaw
+  5: bus
+  6: electric_bus
+  7: truck
+  8: tractor
+  9: cycle
+  10: pedestrian
+path: C:\Users\Rahul Dev\OneDrive\Desktop\Traffic_Project\TRAFFIC-PROJECT\data
+train: train_images
+val: val_images
