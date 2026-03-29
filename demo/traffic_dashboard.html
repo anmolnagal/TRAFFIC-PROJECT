@@ -1,0 +1,2575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TrafficVision AI — Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+  :root {
+    --bg-base: #080d18;
+    --bg-surface: #0e1625;
+    --bg-card: #131e30;
+    --bg-card-hover: #182539;
+    --bg-input: #0a1220;
+    --accent-cyan: #00c8ff;
+    --accent-green: #00e676;
+    --accent-amber: #ffab00;
+    --accent-red: #ff4757;
+    --accent-purple: #a78bfa;
+    --text-primary: #e8f0fe;
+    --text-secondary: #7a8db3;
+    --text-muted: #3d5278;
+    --border: rgba(0, 200, 255, 0.08);
+    --border-accent: rgba(0, 200, 255, 0.2);
+    --sidebar-w: 240px;
+    --header-h: 60px;
+    --font-display: 'Rajdhani', sans-serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+    --font-body: 'DM Sans', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-body);
+    background: var(--bg-base);
+    color: var(--text-primary);
+    display: flex;
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: var(--sidebar-w);
+    background: var(--bg-surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 100;
+    overflow-y: auto;
+  }
+
+  .sidebar-logo {
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo-mark {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-icon {
+    width: 34px; height: 34px;
+    background: linear-gradient(135deg, var(--accent-cyan), #0072ff);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .logo-icon::before {
+    content: '';
+    position: absolute;
+    width: 18px; height: 2px;
+    background: white;
+    top: 12px;
+    left: 8px;
+    border-radius: 2px;
+  }
+  .logo-icon::after {
+    content: '';
+    position: absolute;
+    width: 12px; height: 2px;
+    background: rgba(255,255,255,0.6);
+    top: 18px;
+    left: 8px;
+    border-radius: 2px;
+  }
+
+  .logo-text {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--text-primary);
+  }
+
+  .logo-text span {
+    color: var(--accent-cyan);
+  }
+
+  .logo-sub {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    letter-spacing: 2px;
+    margin-top: 2px;
+  }
+
+  .sidebar-section {
+    padding: 16px 12px 4px;
+  }
+
+  .sidebar-label {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    letter-spacing: 2px;
+    color: var(--text-muted);
+    padding: 0 8px;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 13.5px;
+    font-weight: 400;
+    transition: all 0.15s;
+    margin-bottom: 2px;
+    text-decoration: none;
+    position: relative;
+    border: 1px solid transparent;
+  }
+
+  .nav-item:hover {
+    background: rgba(0, 200, 255, 0.06);
+    color: var(--text-primary);
+    border-color: var(--border);
+  }
+
+  .nav-item.active {
+    background: rgba(0, 200, 255, 0.1);
+    color: var(--accent-cyan);
+    border-color: var(--border-accent);
+  }
+
+  .nav-item.active .nav-icon { opacity: 1; }
+
+  .nav-icon {
+    width: 18px;
+    height: 18px;
+    opacity: 0.5;
+    flex-shrink: 0;
+  }
+
+  .nav-badge {
+    margin-left: auto;
+    background: var(--accent-cyan);
+    color: #000;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-family: var(--font-mono);
+  }
+
+  .nav-badge.red {
+    background: var(--accent-red);
+    color: white;
+  }
+
+  .sidebar-footer {
+    margin-top: auto;
+    padding: 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  .user-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .user-chip:hover { background: var(--bg-card); }
+
+  .user-avatar {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #0072ff, var(--accent-cyan));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+    color: white;
+    font-family: var(--font-display);
+    flex-shrink: 0;
+  }
+
+  .user-name {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .user-role {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+  }
+
+  /* ── MAIN LAYOUT ── */
+  .main {
+    margin-left: var(--sidebar-w);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  /* ── TOPBAR ── */
+  .topbar {
+    height: var(--header-h);
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+
+  .topbar-title {
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: var(--text-primary);
+    flex: 1;
+  }
+
+  .topbar-title span {
+    color: var(--text-secondary);
+    font-weight: 400;
+    font-size: 14px;
+    font-family: var(--font-body);
+    margin-left: 8px;
+  }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid rgba(0, 230, 118, 0.25);
+    background: rgba(0, 230, 118, 0.07);
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--accent-green);
+  }
+
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--accent-green);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+
+  .topbar-time {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .btn {
+    padding: 7px 14px;
+    border-radius: 7px;
+    border: 1px solid var(--border-accent);
+    background: transparent;
+    color: var(--accent-cyan);
+    font-size: 12px;
+    font-family: var(--font-mono);
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.5px;
+  }
+
+  .btn:hover {
+    background: rgba(0, 200, 255, 0.1);
+  }
+
+  .btn-primary {
+    background: var(--accent-cyan);
+    color: #000;
+    font-weight: 600;
+    border-color: var(--accent-cyan);
+  }
+
+  .btn-primary:hover {
+    background: #33d4ff;
+  }
+
+  /* ── PAGE CONTENT ── */
+  .page-content {
+    padding: 24px;
+    display: none;
+    flex-direction: column;
+    gap: 20px;
+    animation: fadeIn 0.2s ease;
+  }
+
+  .page-content.active { display: flex; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .card-title {
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-title-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent-cyan);
+  }
+
+  .card-body { padding: 18px; }
+
+  /* ── METRIC GRID ── */
+  .metric-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+  }
+
+  .metric-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .metric-card:hover { border-color: var(--border-accent); }
+
+  .metric-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .metric-card.cyan::before { background: var(--accent-cyan); }
+  .metric-card.green::before { background: var(--accent-green); }
+  .metric-card.amber::before { background: var(--accent-amber); }
+  .metric-card.red::before { background: var(--accent-red); }
+
+  .metric-label {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .metric-value {
+    font-family: var(--font-display);
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+
+  .metric-value.cyan { color: var(--accent-cyan); }
+  .metric-value.green { color: var(--accent-green); }
+  .metric-value.amber { color: var(--accent-amber); }
+  .metric-value.red { color: var(--accent-red); }
+
+  .metric-delta {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+  }
+
+  .metric-delta .up { color: var(--accent-green); }
+  .metric-delta .down { color: var(--accent-red); }
+
+  /* ── GRID LAYOUTS ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  .grid-60-40 { display: grid; grid-template-columns: 1.5fr 1fr; gap: 14px; }
+  .grid-40-60 { display: grid; grid-template-columns: 1fr 1.5fr; gap: 14px; }
+
+  /* ── FEED PANEL ── */
+  .feed-canvas-wrap {
+    position: relative;
+    background: #010810;
+    border-radius: 8px;
+    overflow: hidden;
+    aspect-ratio: 16/9;
+    border: 1px solid var(--border);
+  }
+
+  #liveCanvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .feed-overlay-top {
+    position: absolute;
+    top: 10px; left: 10px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .feed-badge {
+    background: rgba(255, 71, 87, 0.85);
+    color: white;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .feed-badge-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: white;
+    animation: pulse 1.5s infinite;
+  }
+
+  .feed-cam-id {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: rgba(255,255,255,0.5);
+    padding: 2px 8px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 4px;
+  }
+
+  .feed-overlay-bottom {
+    position: absolute;
+    bottom: 10px;
+    left: 10px; right: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+
+  .feed-stats {
+    display: flex;
+    gap: 8px;
+  }
+
+  .feed-stat-pill {
+    background: rgba(0,0,0,0.7);
+    border: 1px solid rgba(0, 200, 255, 0.3);
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--accent-cyan);
+  }
+
+  .feed-timestamp {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: rgba(255,255,255,0.4);
+  }
+
+  /* ── CONDITION BADGES ── */
+  .conditions-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    padding: 16px;
+  }
+
+  .cond-badge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid;
+    font-size: 12px;
+  }
+
+  .cond-badge.ok {
+    background: rgba(0, 230, 118, 0.07);
+    border-color: rgba(0, 230, 118, 0.2);
+    color: var(--accent-green);
+  }
+
+  .cond-badge.warn {
+    background: rgba(255, 171, 0, 0.07);
+    border-color: rgba(255, 171, 0, 0.2);
+    color: var(--accent-amber);
+  }
+
+  .cond-badge.alert {
+    background: rgba(255, 71, 87, 0.07);
+    border-color: rgba(255, 71, 87, 0.2);
+    color: var(--accent-red);
+  }
+
+  .cond-icon {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .cond-badge.ok .cond-icon { background: rgba(0, 230, 118, 0.15); }
+  .cond-badge.warn .cond-icon { background: rgba(255, 171, 0, 0.15); }
+  .cond-badge.alert .cond-icon { background: rgba(255, 71, 87, 0.15); }
+
+  .cond-name {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    font-weight: 500;
+    margin-bottom: 1px;
+  }
+
+  .cond-val {
+    font-size: 10px;
+    opacity: 0.7;
+  }
+
+  /* ── DETECTION LOG TABLE ── */
+  .log-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  .log-table thead th {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  .log-table tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+
+  .log-table tbody tr:hover { background: rgba(0, 200, 255, 0.03); }
+  .log-table tbody tr:last-child { border-bottom: none; }
+
+  .log-table td {
+    padding: 10px 14px;
+    color: var(--text-secondary);
+    vertical-align: middle;
+  }
+
+  .log-table td:first-child { color: var(--text-muted); font-family: var(--font-mono); font-size: 11px; }
+
+  .class-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    font-weight: 500;
+  }
+
+  .class-tag.car { background: rgba(0,200,255,0.12); color: var(--accent-cyan); }
+  .class-tag.truck { background: rgba(255,171,0,0.12); color: var(--accent-amber); }
+  .class-tag.bus { background: rgba(167,139,250,0.12); color: var(--accent-purple); }
+  .class-tag.motorbike { background: rgba(0,230,118,0.12); color: var(--accent-green); }
+
+  .conf-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .conf-bar {
+    height: 4px;
+    background: var(--bg-surface);
+    border-radius: 2px;
+    width: 60px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .conf-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--accent-cyan);
+  }
+
+  .cond-flag {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    padding: 1px 6px;
+    border-radius: 3px;
+  }
+
+  .cond-flag.blur { background: rgba(255,171,0,0.12); color: var(--accent-amber); }
+  .cond-flag.occlusion { background: rgba(255,71,87,0.12); color: var(--accent-red); }
+  .cond-flag.clear { background: rgba(0,230,118,0.12); color: var(--accent-green); }
+
+  /* ── MODEL METRICS ── */
+  .metric-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .metric-row:last-child { border-bottom: none; }
+
+  .metric-name {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    width: 80px;
+    flex-shrink: 0;
+    letter-spacing: 0.5px;
+  }
+
+  .metric-bar-wrap {
+    flex: 1;
+    height: 6px;
+    background: var(--bg-surface);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .metric-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 1s ease;
+  }
+
+  .metric-num {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    width: 44px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .model-toggle {
+    display: flex;
+    background: var(--bg-surface);
+    border-radius: 7px;
+    padding: 3px;
+    gap: 2px;
+  }
+
+  .model-btn {
+    padding: 5px 12px;
+    border-radius: 5px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    border: none;
+    background: transparent;
+    letter-spacing: 0.5px;
+  }
+
+  .model-btn.active {
+    background: var(--bg-card-hover);
+    color: var(--accent-cyan);
+    border: 1px solid var(--border-accent);
+  }
+
+  /* ── UPLOAD ZONE ── */
+  .upload-zone {
+    border: 1.5px dashed var(--border-accent);
+    border-radius: 10px;
+    padding: 30px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: rgba(0, 200, 255, 0.02);
+  }
+
+  .upload-zone:hover {
+    background: rgba(0, 200, 255, 0.05);
+    border-color: var(--accent-cyan);
+  }
+
+  .upload-icon {
+    width: 44px; height: 44px;
+    margin: 0 auto 12px;
+    border-radius: 10px;
+    background: rgba(0, 200, 255, 0.1);
+    border: 1px solid var(--border-accent);
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .upload-title {
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+
+  .upload-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+  }
+
+  .upload-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .upload-tab {
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: transparent;
+    transition: all 0.15s;
+    letter-spacing: 0.5px;
+  }
+
+  .upload-tab.active {
+    background: rgba(0, 200, 255, 0.1);
+    color: var(--accent-cyan);
+    border-color: var(--border-accent);
+  }
+
+  .stream-input-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .stream-input {
+    flex: 1;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 8px 12px;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .stream-input:focus { border-color: var(--border-accent); }
+  .stream-input::placeholder { color: var(--text-muted); }
+
+  /* ── CAMERA GRID ── */
+  .camera-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .cam-thumb {
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    position: relative;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    aspect-ratio: 16/9;
+    background: #010810;
+  }
+
+  .cam-thumb:hover { border-color: var(--border-accent); }
+  .cam-thumb.selected { border-color: var(--accent-cyan); }
+
+  .cam-thumb canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .cam-label {
+    position: absolute;
+    bottom: 6px;
+    left: 6px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: rgba(255,255,255,0.5);
+    background: rgba(0,0,0,0.6);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+
+  .cam-status {
+    position: absolute;
+    top: 6px; right: 6px;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+  }
+
+  .cam-status.live { background: var(--accent-green); animation: pulse 2s infinite; }
+  .cam-status.offline { background: var(--accent-red); }
+
+  /* ── ALERTS PANEL ── */
+  .alert-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+    cursor: pointer;
+  }
+
+  .alert-item:hover { background: rgba(0, 200, 255, 0.03); }
+  .alert-item:last-child { border-bottom: none; }
+
+  .alert-icon {
+    width: 30px; height: 30px;
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+
+  .alert-icon.red { background: rgba(255,71,87,0.12); }
+  .alert-icon.amber { background: rgba(255,171,0,0.12); }
+  .alert-icon.cyan { background: rgba(0,200,255,0.12); }
+
+  .alert-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+  }
+
+  .alert-desc { font-size: 11px; color: var(--text-muted); }
+
+  .alert-time {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg-base); }
+  ::-webkit-scrollbar-thumb { background: var(--bg-card-hover); border-radius: 3px; }
+
+  /* ── SECTION DIVIDER ── */
+  .section-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: var(--font-display);
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin: 4px 0;
+  }
+
+  .section-divider::before, .section-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── HISTORY PAGE ── */
+  .search-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .search-input {
+    flex: 1;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 9px 14px;
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .search-input:focus { border-color: var(--border-accent); }
+  .search-input::placeholder { color: var(--text-muted); }
+
+  .filter-select {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 9px 14px;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.15s;
+    appearance: none;
+    min-width: 120px;
+  }
+
+  .filter-select:focus { border-color: var(--border-accent); }
+
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    border-top: 1px solid var(--border);
+  }
+
+  .pagination-info {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .pagination-btns {
+    display: flex;
+    gap: 4px;
+  }
+
+  .pg-btn {
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .pg-btn:hover { border-color: var(--border-accent); color: var(--accent-cyan); }
+  .pg-btn.active { background: rgba(0,200,255,0.1); border-color: var(--border-accent); color: var(--accent-cyan); }
+
+  /* ── SETTINGS ── */
+  .settings-group {
+    padding: 18px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .settings-group:last-child { border-bottom: none; }
+
+  .settings-label {
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-bottom: 14px;
+  }
+
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+  }
+
+  .setting-info { flex: 1; }
+  .setting-name { font-size: 13px; color: var(--text-primary); margin-bottom: 2px; }
+  .setting-desc { font-size: 11px; color: var(--text-muted); }
+
+  .toggle {
+    width: 38px; height: 20px;
+    border-radius: 10px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    position: relative;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+
+  .toggle.on { background: rgba(0,200,255,0.3); border-color: var(--accent-cyan); }
+
+  .toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: all 0.2s;
+  }
+
+  .toggle.on::after {
+    left: 20px;
+    background: var(--accent-cyan);
+  }
+
+  .range-input {
+    width: 100%;
+    accent-color: var(--accent-cyan);
+    margin-top: 6px;
+  }
+
+  .range-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 8px;
+  }
+
+  .range-row label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    width: 100px;
+  }
+
+  .range-val {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--accent-cyan);
+    width: 36px;
+    text-align: right;
+  }
+
+  /* ── CHART AREA ── */
+  .chart-wrap {
+    position: relative;
+    padding: 16px;
+  }
+
+  .chart-legend {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+  }
+
+  .legend-dot {
+    width: 8px; height: 8px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  /* ── SCAN LINE EFFECT on live canvas ── */
+  .scanline-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.04) 2px,
+      rgba(0, 0, 0, 0.04) 4px
+    );
+    pointer-events: none;
+  }
+
+  /* Corner brackets for feed */
+  .corner-tl, .corner-tr, .corner-bl, .corner-br {
+    position: absolute;
+    width: 14px; height: 14px;
+    border-color: var(--accent-cyan);
+    border-style: solid;
+    opacity: 0.5;
+  }
+
+  .corner-tl { top: 8px; left: 8px; border-width: 1.5px 0 0 1.5px; }
+  .corner-tr { top: 8px; right: 8px; border-width: 1.5px 1.5px 0 0; }
+  .corner-bl { bottom: 8px; left: 8px; border-width: 0 0 1.5px 1.5px; }
+  .corner-br { bottom: 8px; right: 8px; border-width: 0 1.5px 1.5px 0; }
+
+  /* ── REPORTS PAGE ── */
+  .report-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+
+  .report-card:hover { background: rgba(0, 200, 255, 0.03); }
+  .report-card:last-child { border-bottom: none; }
+
+  .report-icon {
+    width: 38px; height: 38px;
+    border-radius: 9px;
+    border: 1px solid var(--border-accent);
+    background: rgba(0, 200, 255, 0.08);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  .report-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+  }
+
+  .report-meta {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  .report-size {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<!-- ─── SIDEBAR ─── -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-mark">
+      <div class="logo-icon"></div>
+      <div>
+        <div class="logo-text">Traffic<span>Vision</span></div>
+        <div class="logo-sub">AI COMMAND CENTER</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-label">Monitor</div>
+    <div class="nav-item active" onclick="navigate('overview')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+        <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+      </svg>
+      Overview
+    </div>
+    <div class="nav-item" onclick="navigate('live')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor"/>
+      </svg>
+      Live Feed
+    </div>
+    <div class="nav-item" onclick="navigate('upload')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12M8 8l4-4 4 4"/>
+      </svg>
+      Upload & Analyze
+    </div>
+    <div class="nav-item" onclick="navigate('alerts')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+      </svg>
+      Alerts
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-label">Analysis</div>
+    <div class="nav-item" onclick="navigate('history')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+      </svg>
+      Detection Log
+    </div>
+    <div class="nav-item" onclick="navigate('reports')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+      </svg>
+      Reports
+    </div>
+    <div class="nav-item" onclick="navigate('model')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/>
+      </svg>
+      Model Stats
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-label">System</div>
+    <div class="nav-item" onclick="navigate('settings')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+        <circle cx="12" cy="12" r="3"/>
+      </svg>
+      Settings
+    </div>
+  </div>
+
+  <div class="sidebar-footer">
+    <div class="user-chip">
+      <div class="user-avatar">AD</div>
+      <div>
+        <div class="user-name">Admin User</div>
+        <div class="user-role">SYSTEM_ADMIN</div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- ─── MAIN ─── -->
+<div class="main">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="topbar-title" id="topbar-title">Overview <span>Dashboard</span></div>
+    <div class="status-pill">
+      <div class="status-dot"></div>
+      SYSTEM ONLINE
+    </div>
+    <div class="topbar-time" id="clock">--:--:--</div>
+    <button class="btn" onclick="navigate('reports')">Export Report</button>
+    <button class="btn btn-primary" onclick="navigate('upload')">+ New Analysis</button>
+  </header>
+
+  <!-- ═══════════════════════════════════════════
+       PAGE: OVERVIEW
+  ═══════════════════════════════════════════ -->
+  <div class="page-content active" id="page-overview">
+
+    <!-- KPI Row -->
+    <div class="metric-grid">
+      <div class="metric-card cyan">
+        <div class="metric-label">Vehicles Detected</div>
+        <div class="metric-value cyan" id="kpi-total">0</div>
+        <div class="metric-delta" style="color:var(--text-muted);">Run detection to start tracking</div>
+      </div>
+      <div class="metric-card green">
+        <div class="metric-label">Avg Confidence</div>
+        <div class="metric-value green" id="kpi-conf">&mdash;</div>
+        <div class="metric-delta" style="color:var(--text-muted);">No detections yet</div>
+      </div>
+      <div class="metric-card amber">
+        <div class="metric-label">Inference Speed</div>
+        <div class="metric-value amber" id="kpi-speed">&mdash;</div>
+        <div class="metric-delta" style="color:var(--text-muted);">Model loading&hellip;</div>
+      </div>
+      <div class="metric-card red">
+        <div class="metric-label">Active Alerts</div>
+        <div class="metric-value red" id="kpi-alerts">0</div>
+        <div class="metric-delta" style="color:var(--text-muted);">System monitoring active</div>
+      </div>
+    </div>
+
+    <div class="grid-60-40">
+      <!-- Traffic Timeline -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="card-title-dot"></span>Traffic Volume — Today</div>
+          <div class="model-toggle">
+            <button class="model-btn active" id="tb-24h" onclick="setTimeRange('24h')">24H</button>
+            <button class="model-btn" id="tb-7d" onclick="setTimeRange('7d')">7D</button>
+            <button class="model-btn" id="tb-30d" onclick="setTimeRange('30d')">30D</button>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <div class="chart-legend">
+            <div class="legend-item"><span class="legend-dot" style="background:#00c8ff;"></span>Cars</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#ffab00;"></span>Trucks</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#a78bfa;"></span>Buses</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#00e676;"></span>Motorbikes</div>
+          </div>
+          <div style="position:relative; height:220px;">
+            <canvas id="trafficChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Classification Donut -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="card-title-dot"></span>Classification Split</div>
+        </div>
+        <div class="chart-wrap">
+          <div style="position:relative; height:180px;">
+            <canvas id="splitChart"></canvas>
+          </div>
+          <div class="chart-legend" style="justify-content:center; margin-top:10px;">
+            <div class="legend-item"><span class="legend-dot" style="background:#00c8ff;"></span>Car 61%</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#ffab00;"></span>Truck 18%</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#a78bfa;"></span>Bus 9%</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#00e676;"></span>Bike 12%</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-40-60">
+      <!-- Environmental Conditions -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="card-title-dot"></span>Scene Conditions</div>
+          <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);">AUTO DETECTED</span>
+        </div>
+        <div id="scene-conditions-grid" class="conditions-grid">
+          <div style="grid-column:1/-1;padding:24px;text-align:center;color:var(--text-muted);font-family:var(--font-mono);font-size:12px;">
+            No scene data &mdash; start live feed or upload a frame
+          </div>
+        </div>
+      </div>
+
+      <!-- Detection Log Preview -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="card-title-dot"></span>Recent Detections</div>
+          <button class="btn" onclick="navigate('history')">View All</button>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="log-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Class</th>
+                <th>Confidence</th>
+                <th>Camera</th>
+                <th>Condition</th>
+              </tr>
+            </thead>
+            <tbody id="log-preview-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alerts -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span class="card-title-dot"></span>Active Alerts</div>
+        <button class="btn" onclick="navigate('alerts')">Manage All</button>
+      </div>
+      <div id="overview-alerts-list" style="padding:28px;text-align:center;color:var(--text-muted);font-family:var(--font-mono);font-size:12px;">
+        No active alerts &mdash; system is operating normally
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       PAGE: LIVE FEED
+  ═══════════════════════════════════════════ -->
+  <div class="page-content" id="page-live">
+    <div class="grid-60-40">
+      <!-- Primary Feed -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="card-title-dot"></span>Primary View — <span id="live-cam-label">WEBCAM</span></div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" id="webcam-start-btn" onclick="startWebcam()" style="padding:5px 12px;font-size:12px;">▶ Start Webcam</button>
+            <button class="btn" id="webcam-stop-btn" onclick="stopWebcam()" style="color:var(--accent-red);border-color:rgba(255,71,87,0.3);display:none;">⏹ Stop</button>
+            <button class="btn" style="color:var(--accent-red);border-color:rgba(255,71,87,0.3);" id="rec-btn" onclick="toggleRec()">● REC</button>
+          </div>
+        </div>
+        <div class="card-body" style="padding:12px;">
+          <div class="feed-canvas-wrap">
+            <canvas id="liveCanvas"></canvas>
+            <div class="scanline-overlay"></div>
+            <div class="corner-tl"></div><div class="corner-tr"></div>
+            <div class="corner-bl"></div><div class="corner-br"></div>
+            <div class="feed-overlay-top">
+              <div class="feed-badge"><div class="feed-badge-dot"></div>LIVE</div>
+              <div class="feed-cam-id">CAM-03 · ZONE-C · MAIN JUNCTION</div>
+            </div>
+            <div class="feed-overlay-bottom">
+              <div class="feed-stats">
+                <div class="feed-stat-pill" id="feed-count">Vehicles: 7</div>
+                <div class="feed-stat-pill" id="feed-fps">FPS: 30</div>
+                <div class="feed-stat-pill" id="feed-conf">Avg Conf: 89%</div>
+              </div>
+              <div class="feed-timestamp" id="feed-time">00:00:00</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Camera Grid + Real-time Stats -->
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><span class="card-title-dot"></span>Camera Network</div>
+            <span style="font-family:var(--font-mono);font-size:10px;color:var(--accent-green);">5 ONLINE · 1 OFFLINE</span>
+          </div>
+          <div class="camera-grid">
+            <div class="cam-thumb selected" onclick="selectCam(0)"><canvas id="camThumb0"></canvas><div class="cam-label">CAM-03 · Zone C</div><div class="cam-status live"></div></div>
+            <div class="cam-thumb" onclick="selectCam(1)"><canvas id="camThumb1"></canvas><div class="cam-label">CAM-07 · Overpass</div><div class="cam-status live"></div></div>
+            <div class="cam-thumb" onclick="selectCam(2)"><canvas id="camThumb2"></canvas><div class="cam-label">CAM-11 · Tunnel</div><div class="cam-status live"></div></div>
+            <div class="cam-thumb" onclick="selectCam(3)"><canvas id="camThumb3"></canvas><div class="cam-label">CAM-02 · Highway N</div><div class="cam-status live"></div></div>
+            <div class="cam-thumb" onclick="selectCam(4)"><canvas id="camThumb4"></canvas><div class="cam-label">CAM-15 · Flyover</div><div class="cam-status live"></div></div>
+            <div class="cam-thumb" onclick="selectCam(5)" style="opacity:0.4;"><canvas id="camThumb5"></canvas><div class="cam-label">CAM-09 · OFFLINE</div><div class="cam-status offline"></div></div>
+          </div>
+        </div>
+        <div class="card" style="flex:1;">
+          <div class="card-header">
+            <div class="card-title"><span class="card-title-dot"></span>Live Class Counts</div>
+          </div>
+          <div class="chart-wrap" style="padding:12px 16px;">
+            <div style="position:relative;height:150px;">
+              <canvas id="liveBarChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       PAGE: UPLOAD & ANALYZE
+  ═══════════════════════════════════════════ -->
+  <div class="page-content" id="page-upload">
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="card-title-dot"></span>Input Source</div>
+        </div>
+        <div class="card-body">
+          <div class="upload-tabs">
+            <button class="upload-tab active" id="tab-video" onclick="switchTab('video')">Video File</button>
+            <button class="upload-tab" id="tab-image" onclick="switchTab('image')">Image Upload</button>
+            <button class="upload-tab" id="tab-stream" onclick="switchTab('stream')">Live Stream URL</button>
+          </div>
+
+          <div id="upload-panel-video">
+            <div class="upload-zone" onclick="document.getElementById('fileIn').click()" id="video-drop-zone"
+                 ondragover="event.preventDefault()" ondrop="handleDrop(event,'fileIn')">
+              <div class="upload-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00c8ff" stroke-width="1.5">
+                  <path d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>
+              </div>
+              <div class="upload-title">Drop video file here or click</div>
+              <div class="upload-sub">MP4, AVI, MOV, MKV · Max 2GB</div>
+            </div>
+            <input type="file" id="fileIn" accept="video/*" style="display:none;" onchange="handleFileSelect(event)">
+          </div>
+
+          <div id="upload-panel-image" style="display:none;">
+            <div class="upload-zone" onclick="document.getElementById('imgIn').click()"
+                 ondragover="event.preventDefault()" ondrop="handleDrop(event,'imgIn')">
+              <div class="upload-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00c8ff" stroke-width="1.5">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+                  <path d="M21 15l-5-5L5 21"/>
+                </svg>
+              </div>
+              <div class="upload-title">Drop image file here or click</div>
+              <div class="upload-sub">JPG, PNG, WEBP, BMP · Max 50MB</div>
+            </div>
+            <input type="file" id="imgIn" accept="image/*" style="display:none;" onchange="handleFileSelect(event)">
+          </div>
+
+          <div id="upload-panel-stream" style="display:none;">
+            <div style="margin-bottom:10px;font-size:12px;color:var(--text-muted);">Enter RTSP or HTTP stream URL</div>
+            <div class="stream-input-row">
+              <input class="stream-input" type="text" placeholder="rtsp://192.168.1.x:554/stream1" id="streamUrl"/>
+              <button class="btn btn-primary" onclick="connectStream()">Connect</button>
+            </div>
+            <div style="margin-top:10px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">Supports RTSP, HTTP-MJPEG, HLS (.m3u8)</div>
+          </div>
+
+          <div id="file-selected-info" style="display:none;margin-top:12px;">
+            <div style="background:rgba(0,230,118,0.07);border:1px solid rgba(0,230,118,0.2);border-radius:8px;padding:12px 14px;">
+              <div style="font-size:12px;color:var(--accent-green);font-family:var(--font-mono);margin-bottom:4px;">FILE LOADED</div>
+              <div id="file-name" style="font-size:13px;color:var(--text-primary);"></div>
+              <div id="file-meta" style="font-size:11px;color:var(--text-muted);margin-top:3px;font-family:var(--font-mono);"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="card-title-dot"></span>Analysis Configuration</div>
+        </div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);letter-spacing:1px;margin-bottom:8px;">MODEL MODE</div>
+            <div class="model-toggle" style="width:fit-content;">
+              <button class="model-btn active" id="mode-hybrid" onclick="setMode('hybrid')">Hybrid CNN+FFT</button>
+              <button class="model-btn" id="mode-cnn" onclick="setMode('cnn')">CNN Only</button>
+            </div>
+          </div>
+
+          <div>
+            <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);letter-spacing:1px;margin-bottom:6px;">DETECTION THRESHOLD</div>
+            <div class="range-row">
+              <label>Confidence min:</label>
+              <input type="range" class="range-input" min="0" max="100" value="50" id="confRange" oninput="document.getElementById('confVal').textContent=this.value+'%'" style="flex:1;">
+              <span class="range-val" id="confVal">50%</span>
+            </div>
+            <div class="range-row">
+              <label>NMS IoU threshold:</label>
+              <input type="range" class="range-input" min="1" max="99" value="45" id="nmsRange" oninput="document.getElementById('nmsVal').textContent=(this.value/100).toFixed(2)" style="flex:1;">
+              <span class="range-val" id="nmsVal">0.45</span>
+            </div>
+          </div>
+
+          <div>
+            <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);letter-spacing:1px;margin-bottom:8px;">TARGET CLASSES</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn" id="cls-car" onclick="toggleClass('car')" style="color:var(--accent-cyan);border-color:rgba(0,200,255,0.3);background:rgba(0,200,255,0.1);">Car</button>
+              <button class="btn" id="cls-truck" onclick="toggleClass('truck')" style="color:var(--accent-amber);border-color:rgba(255,171,0,0.3);background:rgba(255,171,0,0.1);">Truck</button>
+              <button class="btn" id="cls-bus" onclick="toggleClass('bus')" style="color:var(--accent-purple);border-color:rgba(167,139,250,0.3);background:rgba(167,139,250,0.1);">Bus</button>
+              <button class="btn" id="cls-motorbike" onclick="toggleClass('motorbike')" style="color:var(--accent-green);border-color:rgba(0,230,118,0.3);background:rgba(0,230,118,0.1);">Motorbike</button>
+            </div>
+          </div>
+
+          <div>
+            <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);letter-spacing:1px;margin-bottom:8px;">OUTPUT OPTIONS</div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:var(--text-secondary);">
+                <input type="checkbox" checked style="accent-color:var(--accent-cyan);"> Annotated video output
+              </label>
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:var(--text-secondary);">
+                <input type="checkbox" checked style="accent-color:var(--accent-cyan);"> Detection log CSV
+              </label>
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:var(--text-secondary);">
+                <input type="checkbox" style="accent-color:var(--accent-cyan);"> Per-class heatmap
+              </label>
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:var(--text-secondary);">
+                <input type="checkbox" style="accent-color:var(--accent-cyan);"> Frequency descriptor visualisation
+              </label>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" style="width:100%;padding:12px;font-size:14px;letter-spacing:1px;" id="run-analysis-btn" onclick="startAnalysis()">
+            ▶ RUN ANALYSIS
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress Panel (hidden until analysis starts) -->
+    <div class="card" id="analysis-progress" style="display:none;">
+      <div class="card-header">
+        <div class="card-title"><span class="card-title-dot"></span>Analysis Progress</div>
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--accent-cyan);" id="progress-label">Processing...</span>
+      </div>
+      <div class="card-body">
+        <div style="height:6px;background:var(--bg-surface);border-radius:3px;overflow:hidden;margin-bottom:12px;">
+          <div id="progress-bar" style="height:100%;background:linear-gradient(90deg,var(--accent-cyan),var(--accent-green));border-radius:3px;width:0%;transition:width 0.3s;"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+          <div style="font-family:var(--font-mono);">
+            <div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;">VEHICLES</div>
+            <div style="font-size:18px;color:var(--accent-cyan);font-weight:600;" id="prog-frames">0</div>
+          </div>
+          <div style="font-family:var(--font-mono);">
+            <div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;">DETECTED</div>
+            <div style="font-size:18px;color:var(--accent-green);font-weight:600;" id="prog-detected">0</div>
+          </div>
+          <div style="font-family:var(--font-mono);">
+            <div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;">AVG CONF</div>
+            <div style="font-size:18px;color:var(--accent-amber);font-weight:600;" id="prog-conf">—</div>
+          </div>
+          <div style="font-family:var(--font-mono);">
+            <div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;">STATUS</div>
+            <div style="font-size:18px;color:var(--text-primary);font-weight:600;" id="prog-eta">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Annotated Result Panel (shown after detection completes) -->
+    <div class="card" id="detection-result-card" style="display:none;">
+      <div class="card-header">
+        <div class="card-title"><span class="card-title-dot"></span>Detection Result</div>
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--accent-green);" id="result-summary"></span>
+      </div>
+      <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:14px;padding:14px;">
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);letter-spacing:1px;margin-bottom:8px;">ANNOTATED OUTPUT</div>
+          <img id="result-img" src="" alt="Detection result"
+               style="width:100%;border-radius:8px;border:1px solid var(--border);display:block;">
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);letter-spacing:1px;margin-bottom:8px;">CLASS BREAKDOWN</div>
+          <div id="result-class-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       PAGE: DETECTION LOG / HISTORY
+  ═══════════════════════════════════════════ -->
+  <div class="page-content" id="page-history">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span class="card-title-dot"></span>Detection Log</div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn">Export CSV</button>
+          <button class="btn">Export PDF</button>
+        </div>
+      </div>
+      <div class="card-body" style="padding-bottom:0;">
+        <div class="search-bar">
+          <input class="search-input" type="text" placeholder="Search by class, camera, timestamp..." />
+          <select class="filter-select"><option>All Classes</option><option>Car</option><option>Truck</option><option>Bus</option><option>Motorbike</option></select>
+          <select class="filter-select"><option>All Cameras</option><option>CAM-02</option><option>CAM-03</option><option>CAM-07</option><option>CAM-11</option></select>
+          <select class="filter-select"><option>All Conditions</option><option>Clear</option><option>Motion Blur</option><option>Occlusion</option><option>Low Light</option></select>
+          <input type="date" class="filter-select" style="min-width:140px;">
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="log-table">
+          <thead>
+            <tr>
+              <th>Timestamp</th><th>Frame ID</th><th>Class</th><th>Confidence</th><th>BBox (x,y,w,h)</th>
+              <th>Camera</th><th>Scene Condition</th><th>Model Mode</th>
+            </tr>
+          </thead>
+          <tbody id="log-full-body"></tbody>
+        </table>
+      </div>
+      <div class="pagination">
+        <div class="pagination-info">Showing 1–20 of 4,821 detections</div>
+        <div class="pagination-btns">
+          <button class="pg-btn">‹</button>
+          <button class="pg-btn active">1</button>
+          <button class="pg-btn">2</button>
+          <button class="pg-btn">3</button>
+          <button class="pg-btn">…</button>
+          <button class="pg-btn">241</button>
+          <button class="pg-btn">›</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       PAGE: ALERTS
+  ═══════════════════════════════════════════ -->
+  <div class="page-content" id="page-alerts">
+    <div class="metric-grid">
+      <div class="metric-card red"><div class="metric-label">Critical</div><div class="metric-value red" id="alert-critical">0</div></div>
+      <div class="metric-card amber"><div class="metric-label">Warnings</div><div class="metric-value amber" id="alert-warn">0</div></div>
+      <div class="metric-card cyan"><div class="metric-label">Info</div><div class="metric-value cyan" id="alert-info">0</div></div>
+      <div class="metric-card green"><div class="metric-label">Resolved Today</div><div class="metric-value green" id="alert-resolved">0</div></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span class="card-title-dot"></span>Alert Feed</div>
+        <button class="btn">Mark All Read</button>
+      </div>
+      <div id="alerts-feed" style="padding:36px;text-align:center;color:var(--text-muted);font-family:var(--font-mono);font-size:12px;">
+        No alerts &mdash; all systems nominal
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       PAGE: MODEL STATS
+  ═══════════════════════════════════════════ -->
+  <div class="page-content" id="page-model">
+    <div class="metric-grid">
+      <div class="metric-card green"><div class="metric-label">mAP@0.5</div><div class="metric-value green" id="m-map">&mdash;</div><div class="metric-delta" style="color:var(--text-muted);">Train model to see metrics</div></div>
+      <div class="metric-card cyan"><div class="metric-label">Precision</div><div class="metric-value cyan" id="m-prec">&mdash;</div><div class="metric-delta" style="color:var(--text-muted);">Not yet evaluated</div></div>
+      <div class="metric-card amber"><div class="metric-label">Recall</div><div class="metric-value amber" id="m-rec">&mdash;</div><div class="metric-delta" style="color:var(--text-muted);">Not yet evaluated</div></div>
+      <div class="metric-card red"><div class="metric-label">F1 Score</div><div class="metric-value red" id="m-f1">&mdash;</div><div class="metric-delta" style="color:var(--text-muted);">Not yet evaluated</div></div>
+    </div>
+
+    <!-- Model info card -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span class="card-title-dot"></span>Loaded Model</div>
+        <span id="model-status-badge" style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);">Loading&hellip;</span>
+      </div>
+      <div class="card-body" style="padding:20px 18px;">
+        <div style="font-family:var(--font-mono);font-size:13px;color:var(--text-primary);" id="model-name-badge">Loading model&hellip;</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">Model performance metrics will appear here once you train and evaluate the model using <code style="color:var(--accent-cyan);">src/train_yolo.py</code></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <!-- mAP over epochs chart (empty until trained) -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="card-title-dot"></span>mAP vs Training Epochs</div>
+        </div>
+        <div class="chart-wrap">
+          <div class="chart-legend" style="margin-bottom:8px;">
+            <div class="legend-item"><span class="legend-dot" style="background:#00c8ff;"></span>Hybrid CNN+FFT</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#3d5278;"></span>CNN Baseline</div>
+          </div>
+          <div style="position:relative;height:230px;">
+            <canvas id="epochChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Robustness chart (empty until evaluated) -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="card-title-dot"></span>Robustness Under Adverse Conditions</div>
+        </div>
+        <div class="chart-wrap">
+          <div class="chart-legend">
+            <div class="legend-item"><span class="legend-dot" style="background:#00c8ff;"></span>Hybrid model</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#3d5278;"></span>CNN baseline</div>
+          </div>
+          <div style="position:relative;height:200px;">
+            <canvas id="robustChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       PAGE: REPORTS
+  ═══════════════════════════════════════════ -->
+  <div class="page-content" id="page-reports">
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="card-title-dot"></span>Generate Report</div>
+        </div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:12px;">
+          <div>
+            <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);letter-spacing:1px;margin-bottom:6px;">REPORT TYPE</div>
+            <select class="filter-select" style="width:100%;">
+              <option>Daily Traffic Summary</option>
+              <option>Weekly Analysis Report</option>
+              <option>Model Performance Report</option>
+              <option>Incident & Alert Report</option>
+              <option>Custom Range Report</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);letter-spacing:1px;margin-bottom:6px;">DATE RANGE</div>
+            <div style="display:flex;gap:8px;">
+              <input type="date" class="filter-select" style="flex:1;">
+              <input type="date" class="filter-select" style="flex:1;">
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);letter-spacing:1px;margin-bottom:6px;">FORMAT</div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn" style="flex:1;background:rgba(0,200,255,0.1);color:var(--accent-cyan);">PDF</button>
+              <button class="btn" style="flex:1;">CSV</button>
+              <button class="btn" style="flex:1;">JSON</button>
+            </div>
+          </div>
+          <button class="btn btn-primary" style="width:100%;padding:11px;">Generate & Download</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="card-title-dot"></span>Recent Reports</div>
+        </div>
+        <div class="report-card"><div class="report-icon">📊</div><div><div class="report-title">Daily Summary — 28 Mar 2025</div><div class="report-meta">PDF · Generated 06:00 · Auto-scheduled</div></div><div class="report-size">2.1 MB</div></div>
+        <div class="report-card"><div class="report-icon">📈</div><div><div class="report-title">Weekly Analysis — W12 2025</div><div class="report-meta">PDF · Generated Mon 06:00 · Auto-scheduled</div></div><div class="report-size">8.4 MB</div></div>
+        <div class="report-card"><div class="report-icon">🤖</div><div><div class="report-title">Model Performance — v2.4 Hybrid</div><div class="report-meta">PDF · Manual · Post-training evaluation</div></div><div class="report-size">4.7 MB</div></div>
+        <div class="report-card"><div class="report-icon">⚠</div><div><div class="report-title">Incident Log — March 2025</div><div class="report-meta">CSV · Manual export</div></div><div class="report-size">340 KB</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       PAGE: SETTINGS
+  ═══════════════════════════════════════════ -->
+  <div class="page-content" id="page-settings">
+    <div class="grid-2">
+      <div class="card">
+        <div class="settings-group">
+          <div class="settings-label">Detection</div>
+          <div class="setting-row">
+            <div class="setting-info"><div class="setting-name">Hybrid CNN + Frequency Mode</div><div class="setting-desc">Use handcrafted FFT descriptors alongside spatial CNN features</div></div>
+            <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><div class="setting-name">Real-time inference</div><div class="setting-desc">Process frames as they arrive from the camera feed</div></div>
+            <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><div class="setting-name">Auto scene condition detection</div><div class="setting-desc">Automatically flag blur, occlusion, and low-light frames</div></div>
+            <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><div class="setting-name">Bounding box smoothing</div><div class="setting-desc">Apply Kalman filter for smooth box trajectories</div></div>
+            <div class="toggle" onclick="this.classList.toggle('on')"></div>
+          </div>
+        </div>
+        <div class="settings-group">
+          <div class="settings-label">Thresholds</div>
+          <div class="range-row" style="padding:8px 0;">
+            <label>Confidence min:</label>
+            <input type="range" class="range-input" min="0" max="100" value="50" style="flex:1;" oninput="this.nextElementSibling.textContent=this.value+'%'">
+            <span class="range-val">50%</span>
+          </div>
+          <div class="range-row" style="padding:8px 0;">
+            <label>NMS IoU:</label>
+            <input type="range" class="range-input" min="1" max="99" value="45" style="flex:1;" oninput="this.nextElementSibling.textContent=(this.value/100).toFixed(2)">
+            <span class="range-val">0.45</span>
+          </div>
+          <div class="range-row" style="padding:8px 0;">
+            <label>Blur sensitivity:</label>
+            <input type="range" class="range-input" min="0" max="100" value="60" style="flex:1;" oninput="this.nextElementSibling.textContent=this.value+'%'">
+            <span class="range-val">60%</span>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="settings-group">
+          <div class="settings-label">Alerts & Notifications</div>
+          <div class="setting-row">
+            <div class="setting-info"><div class="setting-name">Congestion alerts</div><div class="setting-desc">Alert when vehicle density exceeds threshold</div></div>
+            <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><div class="setting-name">Low confidence warnings</div><div class="setting-desc">Notify when model confidence drops below 70%</div></div>
+            <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><div class="setting-name">Camera offline alerts</div><div class="setting-desc">Alert when a camera feed stops responding</div></div>
+            <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><div class="setting-name">Email reports</div><div class="setting-desc">Send daily summary to admin email</div></div>
+            <div class="toggle" onclick="this.classList.toggle('on')"></div>
+          </div>
+        </div>
+        <div class="settings-group">
+          <div class="settings-label">System</div>
+          <div class="setting-row">
+            <div class="setting-info"><div class="setting-name">GPU acceleration</div><div class="setting-desc">Use CUDA for inference (NVIDIA GPU required)</div></div>
+            <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><div class="setting-name">Auto-save detection logs</div><div class="setting-desc">Persist logs to database every minute</div></div>
+            <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><div class="setting-name">Dark mode</div><div class="setting-desc">Current: Dark with cyan accents</div></div>
+            <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<!-- Model info banner (bottom of sidebar, dynamic) -->
+
+</div><!-- /main -->
+
+<script>
+/* ── Navigation ── */
+const pages = ['overview','live','upload','history','alerts','model','reports','settings'];
+const pageLabels = {overview:'Overview',live:'Live Feed',upload:'Upload & Analyze',history:'Detection Log',alerts:'Alerts',model:'Model Stats',reports:'Reports',settings:'Settings'};
+const pageDescs = {overview:'Dashboard',live:'Real-time Monitoring',upload:'Batch & Stream Processing',history:'Full Detection History',alerts:'Active Alerts & Events',model:'Performance Metrics',reports:'Export & Reporting',settings:'System Configuration'};
+
+function navigate(page) {
+  pages.forEach(p => {
+    const el = document.getElementById('page-'+p);
+    if (el) el.classList.remove('active');
+  });
+  
+  // Set current nav item to active
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.classList.remove('active');
+    if (el.getAttribute('onclick')?.includes(`'${page}'`)) {
+      el.classList.add('active');
+    }
+  });
+
+  const target = document.getElementById('page-'+page);
+  if (target) target.classList.add('active');
+
+  // Load page-specific data
+  if (page === 'history') {
+    loadFullLog(1);
+  }
+  if (page === 'overview') {
+    loadStats();
+  }
+  
+  document.getElementById('topbar-title').innerHTML = `${pageLabels[page]} <span>${pageDescs[page]}</span>`;
+  if (page === 'live') startLiveFeed();
+}
+
+/* ── Clock ── */
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toTimeString().slice(0,8);
+}
+setInterval(updateClock, 1000); updateClock();
+
+/* ── Empty log state ── */
+function showEmptyLog(tbody, message) {
+  if (!tbody) return;
+  const table = tbody.closest('table');
+  if (!table) return;
+  const cols = table.querySelectorAll('thead th').length;
+  tbody.innerHTML = `<tr><td colspan="${cols}" style="text-align:center;padding:28px;color:var(--text-muted);font-family:var(--font-mono);font-size:12px;">${message}</td></tr>`;
+}
+
+// Initial empty states
+const previewLog = document.getElementById('log-preview-body');
+if (previewLog) showEmptyLog(previewLog, 'No detections yet — start live feed or upload an image');
+const fullLog = document.getElementById('log-full-body');
+if (fullLog) showEmptyLog(fullLog, 'No detections recorded yet');
+
+/* ── Charts ── */
+const CHART_DEFAULTS = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: { legend: { display: false }, tooltip: { backgroundColor: '#131e30', titleColor: '#e8f0fe', bodyColor: '#7a8db3', borderColor: '#1d2e47', borderWidth: 1 } }
+};
+
+// Traffic timeline — starts empty, fills as detections come in
+const hours = ['00','02','04','06','08','10','12','14','16','18','20','22'];
+const trafficChartRef = new Chart(document.getElementById('trafficChart'), {
+  type: 'line',
+  data: {
+    labels: hours.map(h => h+':00'),
+    datasets: [
+      {label:'Cars',      data: new Array(12).fill(0), borderColor:'#00c8ff', backgroundColor:'rgba(0,200,255,0.05)', tension:0.4, pointRadius:3, pointBackgroundColor:'#00c8ff', borderWidth:1.5},
+      {label:'Trucks',    data: new Array(12).fill(0), borderColor:'#ffab00', backgroundColor:'rgba(255,171,0,0.05)',  tension:0.4, pointRadius:3, pointBackgroundColor:'#ffab00', borderWidth:1.5},
+      {label:'Buses',     data: new Array(12).fill(0), borderColor:'#a78bfa', backgroundColor:'rgba(167,139,250,0.05)',tension:0.4, pointRadius:3, pointBackgroundColor:'#a78bfa', borderWidth:1.5},
+      {label:'Motorbikes',data: new Array(12).fill(0), borderColor:'#00e676', backgroundColor:'rgba(0,230,118,0.05)', tension:0.4, pointRadius:3, pointBackgroundColor:'#00e676', borderWidth:1.5}
+    ]
+  },
+  options: {...CHART_DEFAULTS, scales:{
+    x:{grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#3d5278',font:{size:10,family:'IBM Plex Mono'}}},
+    y:{grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#3d5278',font:{size:10,family:'IBM Plex Mono'}}, beginAtZero:true}
+  }}
+});
+
+// Donut split — starts empty
+const splitChartRef = new Chart(document.getElementById('splitChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Car','Truck','Bus','Motorbike'],
+    datasets: [{data:[0,0,0,0], backgroundColor:['#00c8ff','#ffab00','#a78bfa','#00e676'], borderColor:'#131e30', borderWidth:3, hoverOffset:6}]
+  },
+  options: {...CHART_DEFAULTS, cutout:'72%'}
+});
+
+// Live bar chart — starts at zero
+const liveBarRef = new Chart(document.getElementById('liveBarChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Car','Truck','Bus','Motorbike'],
+    datasets: [{data:[0,0,0,0], backgroundColor:['#00c8ff','#ffab00','#a78bfa','#00e676'], borderRadius:4, borderSkipped:false}]
+  },
+  options: {...CHART_DEFAULTS, scales:{
+    x:{grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#3d5278',font:{size:10}}},
+    y:{grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#3d5278',font:{size:10}}, beginAtZero:true}
+  }}
+});
+
+// Epoch chart — placeholder, real data would come from training run results
+new Chart(document.getElementById('epochChart'), {
+  type: 'line',
+  data: {
+    labels: Array.from({length:11},(_,i)=>'E'+(i*5)),
+    datasets: [
+      {label:'Hybrid',       data: new Array(11).fill(null), borderColor:'#00c8ff', tension:0.4, pointRadius:3, pointBackgroundColor:'#00c8ff', borderWidth:2, fill:false},
+      {label:'CNN Baseline', data: new Array(11).fill(null), borderColor:'#3d5278', tension:0.4, pointRadius:3, pointBackgroundColor:'#3d5278', borderWidth:1.5, borderDash:[4,3], fill:false}
+    ]
+  },
+  options:{...CHART_DEFAULTS,scales:{
+    x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#3d5278',font:{size:10,family:'IBM Plex Mono'}}},
+    y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#3d5278',font:{size:10,family:'IBM Plex Mono'}},min:0,max:1}
+  }}
+});
+
+// Robustness grouped bar — placeholder zeros
+new Chart(document.getElementById('robustChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Normal','Low Light','Motion Blur','Occlusion','Complex BG'],
+    datasets: [
+      {label:'Hybrid',   data:[0,0,0,0,0], backgroundColor:'#00c8ff', borderRadius:4},
+      {label:'CNN Only', data:[0,0,0,0,0], backgroundColor:'#3d5278', borderRadius:4}
+    ]
+  },
+  options:{...CHART_DEFAULTS,scales:{
+    x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#3d5278',font:{size:10}}},
+    y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#3d5278',font:{size:10}},beginAtZero:true,max:100}
+  }}
+});
+
+/* ── SocketIO Client Setup ── */
+const socket = io();
+
+socket.on('connect', () => console.log('[TV] Connected to Python backend'));
+socket.on('disconnect', () => console.log('[TV] Disconnected from backend'));
+
+/* ── Model info from backend ── */
+function loadModelInfo() {
+  fetch('/api/model-info')
+    .then(r => r.json())
+    .then(d => {
+      const label = d.loading ? 'Loading model…' : d.custom ? d.name : d.name;
+      // Update model stats page if visible
+      const el = document.getElementById('model-name-badge');
+      if (el) el.textContent = label;
+    })
+    .catch(() => {});
+}
+
+function loadStats() {
+  fetch('/api/stats')
+    .then(r => r.json())
+    .then(d => {
+      // Update KPIs
+      const kpiTotal = document.getElementById('kpi-total');
+      const kpiConf = document.getElementById('kpi-conf');
+      if (kpiTotal) kpiTotal.textContent = d.total.toLocaleString();
+      if (kpiConf && d.avg_conf > 0) kpiConf.textContent = d.avg_conf + '%';
+
+      // Update Overview Recent Detections
+      const tbody = document.getElementById('log-preview-body');
+      if (tbody) {
+        if (d.recent && d.recent.length > 0) {
+          tbody.innerHTML = '';
+          d.recent.slice(0, 6).forEach(r => {
+            tbody.innerHTML += `
+              <tr>
+                <td>${r.ts}</td>
+                <td><span class="class-tag ${r.cls}">${r.cls.charAt(0).toUpperCase() + r.cls.slice(1)}</span></td>
+                <td>
+                  <div class="conf-bar-wrap">
+                    <div class="conf-bar"><div class="conf-fill" style="width:${Math.round(r.conf * 100)}%;"></div></div>
+                    <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);">${r.conf.toFixed(2)}</span>
+                  </div>
+                </td>
+                <td>${r.source || 'live'}</td>
+                <td><span class="cond-flag clear">clear</span></td>
+              </tr>`;
+          });
+        } else {
+          showEmptyLog(tbody, 'No detections yet — start live feed or upload an image');
+        }
+      }
+
+      // Update Line Chart (Traffic Volume)
+      // Bucketizing into 2-hour slots: 00-01, 02-03, ..., 22-23
+      if (typeof trafficChartRef !== 'undefined' && d.hourly_counts) {
+        const clsMap = { 
+          'Cars':       ['car'], 
+          'Trucks':     ['truck'], 
+          'Buses':      ['bus'], 
+          'Motorbikes': ['motorcycle', 'two_wheeler', 'bicycle'] 
+        };
+        
+        trafficChartRef.data.datasets.forEach(ds => {
+          const classes = clsMap[ds.label] || [];
+          const newData = new Array(12).fill(0);
+          for (let h = 0; h < 24; h++) {
+            const hStr = h.toString().padStart(2, '0');
+            const bucketIdx = Math.floor(h / 2); // 0-23 -> 0-11
+            const hourData = d.hourly_counts[hStr] || {};
+            classes.forEach(c => {
+              newData[bucketIdx] += (hourData[c] || 0);
+            });
+          }
+          ds.data = newData;
+        });
+        trafficChartRef.update();
+      }
+
+      // Update Split Donut chart (Distribution)
+      if (typeof splitChartRef !== 'undefined' && d.class_totals) {
+        // We only show top 4 major classes in the donut for layout
+        const majorClasses = ['car', 'truck', 'bus', 'motorcycle', 'two_wheeler', 'pedestrian'];
+        const counts = majorClasses.map(c => d.class_totals[c] || 0);
+        
+        // Match standard colors: cyan, amber, purple, green, white, blue
+        splitChartRef.data.labels = ['Car', 'Truck', 'Bus', 'Motorbike', 'Cycle/2W', 'Pedestrian'];
+        splitChartRef.data.datasets[0].data = counts;
+        splitChartRef.update();
+      }
+
+      // Update Live Bar Chart (Current scene)
+      if (typeof liveBarRef !== 'undefined' && d.recent && d.recent.length > 0) {
+        const latest = d.recent[0];
+        // This bar chart usually shows counts for THE CURRENT FRAME/SECOND
+        // From /api/stats, d.recent is a list of individuals. 
+        // For a better "Live Bar", we should tally the classes in the very latest batch.
+        const recentBatchTime = d.recent[0].ts;
+        const currentTally = {};
+        d.recent.forEach(r => {
+          if (r.ts === recentBatchTime) {
+            currentTally[r.cls] = (currentTally[r.cls] || 0) + 1;
+          }
+        });
+        
+        const labels = ['car', 'truck', 'bus', 'motorcycle', 'two_wheeler'];
+        liveBarRef.data.datasets[0].data = labels.map(l => currentTally[l] || 0);
+        liveBarRef.update();
+      }
+    })
+    .catch(err => console.error('[TV] Stats fetch error:', err));
+}
+
+let currentPage = 1;
+function loadFullLog(page = 1) {
+  currentPage = page;
+  fetch(`/api/log?page=${page}&per_page=20`)
+    .then(r => r.json())
+    .then(d => {
+      const tbody = document.getElementById('log-full-body');
+      const pageInfo = document.querySelector('.pagination-info');
+      const pageBtns = document.querySelector('.pagination-btns');
+      
+      if (!tbody) return;
+
+      if (d.entries && d.entries.length > 0) {
+        tbody.innerHTML = '';
+        d.entries.forEach(r => {
+          tbody.innerHTML += `
+            <tr>
+              <td>${r.ts}</td>
+              <td style="font-family:var(--font-mono);color:var(--text-muted);">#${r.frame}</td>
+              <td><span class="class-tag ${r.cls}">${r.cls.charAt(0).toUpperCase() + r.cls.slice(1)}</span></td>
+              <td>
+                <div class="conf-bar-wrap">
+                  <div class="conf-bar"><div class="conf-fill" style="width:${Math.round(r.conf * 100)}%;"></div></div>
+                  <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);">${r.conf.toFixed(2)}</span>
+                </div>
+              </td>
+              <td style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);">${r.bbox?.join(', ') || '—'}</td>
+              <td>${r.source}</td>
+              <td><span class="cond-flag clear">clear</span></td>
+              <td style="font-family:var(--font-mono);font-size:10px;color:var(--accent-cyan);">YOLO v8</td>
+            </tr>`;
+        });
+
+        // Update pagination info
+        const start = (d.page - 1) * d.per_page + 1;
+        const end = Math.min(d.total, d.page * d.per_page);
+        if (pageInfo) pageInfo.textContent = `Showing ${start}–${end} of ${d.total.toLocaleString()} detections`;
+
+        // Update pagination buttons
+        if (pageBtns) {
+          pageBtns.innerHTML = '';
+          const maxVisible = 5;
+          const startPage = Math.max(1, d.page - 2);
+          const endPage = Math.min(d.pages, startPage + maxVisible - 1);
+          
+          if (d.page > 1) {
+            pageBtns.innerHTML += `<button class="pg-btn" onclick="loadFullLog(${d.page - 1})">‹</button>`;
+          }
+          
+          for (let i = startPage; i <= endPage; i++) {
+            pageBtns.innerHTML += `<button class="pg-btn ${i === d.page ? 'active' : ''}" onclick="loadFullLog(${i})">${i}</button>`;
+          }
+          
+          if (d.page < d.pages) {
+            pageBtns.innerHTML += `<button class="pg-btn" onclick="loadFullLog(${d.page + 1})">›</button>`;
+          }
+        }
+      } else {
+        showEmptyLog(tbody, 'No detections recorded yet');
+        if (pageInfo) pageInfo.textContent = 'Showing 0 detections';
+        if (pageBtns) pageBtns.innerHTML = '';
+      }
+    })
+    .catch(err => console.error('[TV] Full log fetch error:', err));
+}
+
+// Poll stats every 3 seconds
+setInterval(loadStats, 3000);
+loadModelInfo();
+loadStats(); // Initial load
+
+
+/* ── LIVE FEED: Real Webcam via SocketIO ── */
+let webcamRunning = false;
+let liveImg = new Image();
+
+// When we receive a frame from Python
+socket.on('frame', data => {
+  liveImg.onload = () => {
+    const canvas = document.getElementById('liveCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    canvas.width  = canvas.offsetWidth  || 640;
+    canvas.height = canvas.offsetHeight || 360;
+    ctx.drawImage(liveImg, 0, 0, canvas.width, canvas.height);
+  };
+  liveImg.src = 'data:image/jpeg;base64,' + data.image;
+
+  // Update overlay stats
+  const countEl = document.getElementById('feed-count');
+  const confEl  = document.getElementById('feed-conf');
+  const timeEl  = document.getElementById('feed-time');
+  const fpsEl   = document.getElementById('feed-fps');
+  if (countEl) countEl.textContent = `Vehicles: ${data.count}`;
+  if (confEl)  confEl.textContent  = `Avg Conf: ${data.avg_conf}%`;
+  if (timeEl)  timeEl.textContent  = new Date().toTimeString().slice(0,8);
+  if (fpsEl)   fpsEl.textContent   = 'FPS: ~20';
+
+  // Update live bar chart
+  const cc = data.class_counts || {};
+  liveBarRef.data.datasets[0].data = [
+    cc.car||0, cc.truck||0, cc.bus||0, cc.motorbike||cc.two_wheeler||0
+  ];
+  liveBarRef.update('none');
+});
+
+socket.on('webcam_started', d => {
+  webcamRunning = true;
+  document.getElementById('webcam-start-btn').style.display = 'none';
+  document.getElementById('webcam-stop-btn').style.display  = '';
+  document.getElementById('live-cam-label').textContent = 'WEBCAM · LIVE';
+  document.getElementById('feed-count').textContent = 'Vehicles: 0';
+});
+
+socket.on('webcam_stopped', () => {
+  webcamRunning = false;
+  document.getElementById('webcam-start-btn').style.display = '';
+  document.getElementById('webcam-stop-btn').style.display  = 'none';
+  document.getElementById('live-cam-label').textContent = 'WEBCAM';
+  // Draw placeholder
+  drawPlaceholderCanvas();
+});
+
+socket.on('webcam_error', d => {
+  alert('Webcam error: ' + d.error);
+  webcamRunning = false;
+  document.getElementById('webcam-start-btn').style.display = '';
+  document.getElementById('webcam-stop-btn').style.display  = 'none';
+});
+
+function startWebcam() {
+  if (webcamRunning) return;
+  socket.emit('start_webcam', {index: 0});
+}
+
+function stopWebcam() {
+  socket.emit('stop_webcam');
+}
+
+function drawPlaceholderCanvas() {
+  const canvas = document.getElementById('liveCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width  = canvas.offsetWidth  || 640;
+  canvas.height = canvas.offsetHeight || 360;
+  ctx.fillStyle = '#010810';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  // Grid
+  ctx.strokeStyle = 'rgba(0,200,255,0.04)';
+  ctx.lineWidth = 0.5;
+  for (let gx=0;gx<canvas.width;gx+=40)  { ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,canvas.height);ctx.stroke(); }
+  for (let gy=0;gy<canvas.height;gy+=40) { ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(canvas.width,gy);ctx.stroke(); }
+  // Placeholder text
+  ctx.fillStyle = 'rgba(0,200,255,0.2)';
+  ctx.font = '600 16px IBM Plex Mono';
+  ctx.textAlign = 'center';
+  ctx.fillText('▶ Click "Start Webcam" to begin live detection', canvas.width/2, canvas.height/2 - 10);
+  ctx.font = '12px IBM Plex Mono';
+  ctx.fillStyle = 'rgba(0,200,255,0.1)';
+  ctx.fillText('Real-time YOLO inference will appear here', canvas.width/2, canvas.height/2 + 18);
+  ctx.textAlign = 'left';
+}
+
+// Also draw placeholder for the camera thumbnails
+function drawThumbPlaceholder(canvas, label) {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width  = canvas.offsetWidth  || 120;
+  canvas.height = canvas.offsetHeight || 68;
+  ctx.fillStyle = '#010810';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle = 'rgba(0,200,255,0.08)';
+  ctx.lineWidth = 0.5;
+  for (let gx=0;gx<canvas.width;gx+=20)  { ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,canvas.height);ctx.stroke(); }
+  for (let gy=0;gy<canvas.height;gy+=20) { ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(canvas.width,gy);ctx.stroke(); }
+}
+
+// Initialise canvas placeholders on page load
+window.addEventListener('load', () => {
+  drawPlaceholderCanvas();
+  for (let i=0;i<6;i++) {
+    drawThumbPlaceholder(document.getElementById('camThumb'+i));
+  }
+});
+
+function startLiveFeed() {
+  drawPlaceholderCanvas();
+}
+
+
+/* ── UPLOAD & ANALYZE: Real YOLO detection ── */
+let selectedFile = null;
+
+function handleFileSelect(e) {
+  const f = e.target.files[0];
+  if (!f) return;
+  selectedFile = f;
+  document.getElementById('file-selected-info').style.display = '';
+  document.getElementById('file-name').textContent = f.name;
+  document.getElementById('file-meta').textContent = `${(f.size/1024/1024).toFixed(1)} MB · ${f.type || 'unknown'}`;
+  // Hide previous result
+  document.getElementById('detection-result-card').style.display = 'none';
+}
+
+function handleDrop(event, inputId) {
+  event.preventDefault();
+  const f = event.dataTransfer.files[0];
+  if (!f) return;
+  const input = document.getElementById(inputId);
+  // Create a DataTransfer and assign
+  const dt = new DataTransfer();
+  dt.items.add(f);
+  input.files = dt.files;
+  handleFileSelect({target: input});
+}
+
+function startAnalysis() {
+  if (!selectedFile) {
+    alert('Please select an image or video file first.');
+    return;
+  }
+
+  // Check it's an image (video analysis not yet supported via REST)
+  const isImage = selectedFile.type.startsWith('image/');
+
+  const panel = document.getElementById('analysis-progress');
+  const resultCard = document.getElementById('detection-result-card');
+  panel.style.display = '';
+  resultCard.style.display = 'none';
+
+  document.getElementById('progress-bar').style.width = '0%';
+  document.getElementById('progress-label').textContent = 'Uploading…';
+  document.getElementById('prog-frames').textContent = '—';
+  document.getElementById('prog-detected').textContent = '—';
+  document.getElementById('prog-conf').textContent = '—';
+  document.getElementById('prog-eta').textContent = '—';
+
+  const btn = document.getElementById('run-analysis-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Processing…';
+
+  if (!isImage) {
+    // Video: simulate progress (real frame-by-frame not yet supported via HTTP)
+    simulateVideoProgress();
+    return;
+  }
+
+  // Animate progress bar to 40% while uploading
+  document.getElementById('progress-bar').style.width = '40%';
+  document.getElementById('progress-label').textContent = 'Running YOLO inference…';
+
+  const confVal = parseInt(document.getElementById('confRange').value || 50);
+  const formData = new FormData();
+  formData.append('file', selectedFile);
+  formData.append('conf', (confVal / 100).toFixed(2));
+
+  fetch('/api/detect', { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(d => {
+      if (d.error) throw new Error(d.error);
+
+      // Complete progress bar
+      document.getElementById('progress-bar').style.width = '100%';
+      document.getElementById('progress-label').textContent = 'Analysis Complete ✓';
+      document.getElementById('prog-frames').textContent = '1';
+      document.getElementById('prog-detected').textContent = d.count;
+      document.getElementById('prog-conf').textContent = d.avg_conf + '%';
+      document.getElementById('prog-eta').textContent = 'Done';
+
+      // Show annotated image
+      document.getElementById('result-img').src = 'data:image/jpeg;base64,' + d.image;
+      document.getElementById('result-summary').textContent = `${d.count} vehicle(s) detected · Avg conf ${d.avg_conf}%`;
+
+      // Build class breakdown list
+      const list = document.getElementById('result-class-list');
+      list.innerHTML = '';
+      Object.entries(d.class_counts || {}).sort((a,b)=>b[1]-a[1]).forEach(([cls, cnt]) => {
+        const colorMap = {car:'var(--accent-cyan)',truck:'var(--accent-amber)',bus:'var(--accent-purple)',
+                          motorbike:'var(--accent-green)',two_wheeler:'var(--accent-green)',
+                          pedestrian:'#ff6fb0',bicycle:'#a0f0ff'};
+        const col = colorMap[cls] || 'var(--text-secondary)';
+        list.innerHTML += `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;
+                       background:var(--bg-surface);border-radius:6px;border:1px solid var(--border);">
+            <span class="class-tag ${cls}" style="font-size:12px;">${cls.charAt(0).toUpperCase()+cls.slice(1)}</span>
+            <span style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:${col};">×${cnt}</span>
+          </div>`;
+      });
+
+      resultCard.style.display = '';
+
+      // Reload stats to update KPIs
+      setTimeout(loadStats, 500);
+    })
+    .catch(err => {
+      document.getElementById('progress-label').textContent = 'Error: ' + err.message;
+      document.getElementById('progress-bar').style.width = '100%';
+      document.getElementById('progress-bar').style.background = 'var(--accent-red)';
+    })
+    .finally(() => {
+      btn.disabled = false;
+      btn.textContent = '▶ RUN ANALYSIS';
+    });
+}
+
+let progInt = null;
+function simulateVideoProgress() {
+  // Fallback simulation for videos (full video analysis would require server-side streaming)
+  let p = 0;
+  clearInterval(progInt);
+  document.getElementById('prog-eta').textContent = '~';
+  document.getElementById('progress-label').textContent = 'Note: Full video analysis runs via python demo/app.py pipeline';
+  progInt = setInterval(() => {
+    p = Math.min(100, p + rnd(1,3));
+    document.getElementById('progress-bar').style.width = p+'%';
+    document.getElementById('prog-frames').textContent = Math.round(p*2);
+    document.getElementById('prog-detected').textContent = Math.round(p*1.2);
+    document.getElementById('prog-conf').textContent = Math.round(78+p*0.12)+'%';
+    if (p>=100) {
+      clearInterval(progInt);
+      document.getElementById('progress-label').textContent = 'Simulation Complete — Upload an image for real detection';
+      document.getElementById('run-analysis-btn').disabled = false;
+      document.getElementById('run-analysis-btn').textContent = '▶ RUN ANALYSIS';
+    }
+  }, 120);
+}
+
+function connectStream() {
+  const url = document.getElementById('streamUrl').value;
+  if (!url) return;
+  alert('Stream connection: ' + url + '\n(Route this through your RTSP handler in app.py)');
+}
+
+
+/* ── Time Range Buttons ── */
+function setTimeRange(r) {
+  ['24h','7d','30d'].forEach(t => document.getElementById('tb-'+t).classList.toggle('active', t===r));
+}
+
+/* ── Model toggle buttons ── */
+function toggleModelMode(btn, mode) {
+  btn.parentElement.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+/* ── Upload tabs ── */
+function switchTab(tab) {
+  ['video','image','stream'].forEach(t => {
+    document.getElementById('upload-panel-'+t).style.display = t===tab ? '' : 'none';
+    document.getElementById('tab-'+t).classList.toggle('active', t===tab);
+  });
+  selectedFile = null;
+  document.getElementById('file-selected-info').style.display = 'none';
+  document.getElementById('detection-result-card').style.display = 'none';
+  document.getElementById('analysis-progress').style.display = 'none';
+}
+
+function setMode(m) {
+  document.getElementById('mode-hybrid').classList.toggle('active', m==='hybrid');
+  document.getElementById('mode-cnn').classList.toggle('active', m==='cnn');
+}
+
+function toggleClass(cls) {
+  document.getElementById('cls-'+cls).classList.toggle('active');
+}
+
+let recActive = false;
+function toggleRec() {
+  recActive = !recActive;
+  const btn = document.getElementById('rec-btn');
+  if (recActive) {
+    btn.style.background = 'rgba(255,71,87,0.2)';
+    btn.textContent = '⏹ STOP';
+  } else {
+    btn.style.background = '';
+    btn.textContent = '● REC';
+  }
+}
+</script>
+</body>
+</html>
