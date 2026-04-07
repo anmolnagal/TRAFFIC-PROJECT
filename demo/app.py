@@ -105,31 +105,28 @@ class_totals       = Counter()
 _load_persisted()
 
 # ── Model loading ─────────────────────────────────────────────────────────────
-
 def load_model():
     global yolo_model, model_is_custom, model_name, model_loading
     try:
+        print("[TrafficVision] Starting model download...")
         from ultralytics import YOLO
-        if os.path.exists(CUSTOM_MODEL):
-            mdl    = YOLO(CUSTOM_MODEL)
-            custom = True
-            name   = "indian_vehicles_yolo.pt"
-        else:
-            mdl    = YOLO(FALLBACK_MODEL)
-            custom = False
-            name   = "yolov8n.pt (COCO fallback)"
-
+        
+        # Force download yolov8n.pt to current directory
+        print("[TrafficVision] Downloading yolov8n.pt...")
+        mdl = YOLO("yolov8n.pt")
+        
         yolo_model      = mdl
-        model_is_custom = custom
-        model_name      = name
+        model_is_custom = False
+        model_name      = "yolov8n.pt (COCO)"
         model_loading   = False
-        print(f"[TrafficVision] Model loaded: {name}")
-        socketio.emit("model_ready", {"name": name, "custom": custom}, namespace="/")
+        print(f"[TrafficVision] ✓ Model loaded successfully: {model_name}")
+        socketio.emit("model_ready", {"name": model_name, "custom": False}, namespace="/")
     except Exception as exc:
         model_loading = False
-        print(f"[TrafficVision] Model load error: {exc}")
+        print(f"[TrafficVision] ✗ Model load error: {exc}")
+        import traceback
+        traceback.print_exc()
         socketio.emit("model_error", {"error": str(exc)}, namespace="/")
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
