@@ -105,31 +105,28 @@ class_totals       = Counter()
 _load_persisted()
 
 # ── Model loading ─────────────────────────────────────────────────────────────
-
 def load_model():
     global yolo_model, model_is_custom, model_name, model_loading
     try:
+        print("[TrafficVision] Starting model download...")
         from ultralytics import YOLO
-        if os.path.exists(CUSTOM_MODEL):
-            mdl    = YOLO(CUSTOM_MODEL)
-            custom = True
-            name   = "indian_vehicles_yolo.pt"
-        else:
-            mdl    = YOLO(FALLBACK_MODEL)
-            custom = False
-            name   = "yolov8n.pt (COCO fallback)"
-
+        
+        # Force download yolov8n.pt to current directory
+        print("[TrafficVision] Downloading yolov8n.pt...")
+        mdl = YOLO("yolov8n.pt")
+        
         yolo_model      = mdl
-        model_is_custom = custom
-        model_name      = name
+        model_is_custom = False
+        model_name      = "yolov8n.pt (COCO)"
         model_loading   = False
-        print(f"[TrafficVision] Model loaded: {name}")
-        socketio.emit("model_ready", {"name": name, "custom": custom}, namespace="/")
+        print(f"[TrafficVision] ✓ Model loaded successfully: {model_name}")
+        socketio.emit("model_ready", {"name": model_name, "custom": False}, namespace="/")
     except Exception as exc:
         model_loading = False
-        print(f"[TrafficVision] Model load error: {exc}")
+        print(f"[TrafficVision] ✗ Model load error: {exc}")
+        import traceback
+        traceback.print_exc()
         socketio.emit("model_error", {"error": str(exc)}, namespace="/")
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -373,23 +370,34 @@ def on_start_webcam(data=None):
         emit("webcam_error", {"error": "Model not loaded yet"})
         return
 
-    cam_index = int((data or {}).get("index", 0))
-    cap = cv2.VideoCapture(cam_index)
+    raw_source = (data or {}).get("index", 0)
+    
+    # Smart source detection: if it's all digits, it's a camera index.
+    # Otherwise, it's likely a stream URL (RTSP, HTTP, etc.)
+    if str(raw_source).isdigit():
+        source = int(raw_source)
+        label = f"Camera {source}"
+    else:
+        source = str(raw_source)
+        label = f"Remote Stream"
+
+    cap = cv2.VideoCapture(source)
     if not cap.isOpened():
-        emit("webcam_error", {"error": f"Cannot open camera index {cam_index}"})
+        emit("webcam_error", {"error": f"Cannot open source: {source}"})
         return
 
-    # Optimise capture size for speed
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH,  640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    # Optimize capture size for local webcams (may not apply to some RTSP streams)
+    if isinstance(source, int):
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH,  640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
     webcam_cap    = cap
     webcam_active = True
     webcam_thread = threading.Thread(target=webcam_worker, daemon=True)
     webcam_thread.start()
 
-    emit("webcam_started", {"index": cam_index})
-    print(f"[TrafficVision] Webcam started (index={cam_index})")
+    emit("webcam_started", {"index": raw_source, "label": label})
+    print(f"[TrafficVision] Source started: {label} ({source})")
 
 
 @socketio.on("stop_webcam")
@@ -434,4 +442,5 @@ if __name__ == "__main__":
 
     threading.Thread(target=open_browser, daemon=True).start()
 
-    socketio.run(app, host="0.0.0.0", port=5000, debug=False, use_reloader=False)
+    port = int(os.environ.get("PORT", 5000))
+    socketio.run(app, host="0.0.0.0", port=port, debug=False, use_reloader=False, allow_unsafe_werkzeug=True)
