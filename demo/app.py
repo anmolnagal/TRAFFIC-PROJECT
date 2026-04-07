@@ -254,9 +254,9 @@ def api_detect():
     if model is None:
         # Last-chance lazy load (handles cases where load_model thread failed)
         try:
+            global yolo_model, model_is_custom, model_name, model_loading
             print("[TrafficVision] Lazy loading model for detect request...")
             from ultralytics import YOLO
-            global yolo_model, model_is_custom, model_name, model_loading
             model_loading   = True
             mdl             = YOLO("yolov8n.pt")
             yolo_model      = mdl
