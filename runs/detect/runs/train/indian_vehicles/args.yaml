@@ -1,7 +1,7 @@
 task: detect
 mode: train
-model: C:\Users\Rahul Dev\OneDrive\Desktop\Traffic_Project\TRAFFIC-PROJECT\yolov8n.pt
-data: C:\Users\Rahul Dev\OneDrive\Desktop\Traffic_Project\TRAFFIC-PROJECT\configs\indian_vehicles.yaml
+model: c:\Users\Rahul Dev\OneDrive\Desktop\Traffic_Project\TRAFFIC-PROJECT\yolov8n.pt
+data: c:\Users\Rahul Dev\OneDrive\Desktop\Traffic_Project\TRAFFIC-PROJECT\configs\indian_vehicles.yaml
 epochs: 60
 time: null
 patience: 20

@@ -373,23 +373,34 @@ def on_start_webcam(data=None):
         emit("webcam_error", {"error": "Model not loaded yet"})
         return
 
-    cam_index = int((data or {}).get("index", 0))
-    cap = cv2.VideoCapture(cam_index)
+    raw_source = (data or {}).get("index", 0)
+    
+    # Smart source detection: if it's all digits, it's a camera index.
+    # Otherwise, it's likely a stream URL (RTSP, HTTP, etc.)
+    if str(raw_source).isdigit():
+        source = int(raw_source)
+        label = f"Camera {source}"
+    else:
+        source = str(raw_source)
+        label = f"Remote Stream"
+
+    cap = cv2.VideoCapture(source)
     if not cap.isOpened():
-        emit("webcam_error", {"error": f"Cannot open camera index {cam_index}"})
+        emit("webcam_error", {"error": f"Cannot open source: {source}"})
         return
 
-    # Optimise capture size for speed
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH,  640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    # Optimize capture size for local webcams (may not apply to some RTSP streams)
+    if isinstance(source, int):
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH,  640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
     webcam_cap    = cap
     webcam_active = True
     webcam_thread = threading.Thread(target=webcam_worker, daemon=True)
     webcam_thread.start()
 
-    emit("webcam_started", {"index": cam_index})
-    print(f"[TrafficVision] Webcam started (index={cam_index})")
+    emit("webcam_started", {"index": raw_source, "label": label})
+    print(f"[TrafficVision] Source started: {label} ({source})")
 
 
 @socketio.on("stop_webcam")
