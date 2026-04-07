@@ -97,7 +97,6 @@ def load_model():
         print("[TrafficVision] Loading model...")
         from ultralytics import YOLO
 
-        # Try custom model first, fall back to yolov8n
         if os.path.exists(CUSTOM_MODEL):
             print(f"[TrafficVision] Found custom model: {CUSTOM_MODEL}")
             mdl    = YOLO(CUSTOM_MODEL)
@@ -244,17 +243,16 @@ def api_log():
 
 @app.route("/api/detect", methods=["POST"])
 def api_detect():
-    # If still in initial load, wait up to 30s for it to finish
+    global yolo_model, model_is_custom, model_name, model_loading
+
+    # Wait up to 30s if model is still loading
     waited = 0
     while model_loading and waited < 30:
         time.sleep(1)
         waited += 1
 
-    model = yolo_model
-    if model is None:
-        # Last-chance lazy load (handles cases where load_model thread failed)
+    if yolo_model is None:
         try:
-            global yolo_model, model_is_custom, model_name, model_loading
             print("[TrafficVision] Lazy loading model for detect request...")
             from ultralytics import YOLO
             model_loading   = True
@@ -263,11 +261,12 @@ def api_detect():
             model_is_custom = False
             model_name      = "yolov8n.pt (COCO)"
             model_loading   = False
-            model           = yolo_model
             print("[TrafficVision] Lazy load succeeded")
         except Exception as exc:
             model_loading = False
             return jsonify({"error": f"Model unavailable: {exc}"}), 503
+
+    model = yolo_model
 
     file = request.files.get("file")
     if not file:
@@ -306,7 +305,7 @@ def api_detect():
 def webcam_worker():
     global webcam_active, webcam_cap
 
-    detect_every = 4
+    detect_every  = 4
     frame_counter = 0
     last_boxes, last_classes, last_confs = [], [], []
     t_last = time.time()
@@ -416,7 +415,6 @@ if __name__ == "__main__":
     print("  Starting server at http://localhost:5000")
     print("=" * 60)
 
-    # ← THE CRITICAL FIX: actually start loading the model
     threading.Thread(target=load_model, daemon=True).start()
 
     port = int(os.environ.get("PORT", 10000))
