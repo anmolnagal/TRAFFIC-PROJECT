@@ -71,8 +71,12 @@ def _save_persisted():
 app = Flask(__name__, static_folder=DEMO_DIR, static_url_path="")
 app.config["SECRET_KEY"] = "trafficvision-secret"
 
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet",
-                    max_http_buffer_size=10 * 1024 * 1024)
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode="threading",   # ✅ FIX
+    max_http_buffer_size=10 * 1024 * 1024
+)
 
 # ── Global state ──────────────────────────────────────────────────────────────
 yolo_model      = None
@@ -418,4 +422,5 @@ if __name__ == "__main__":
     threading.Thread(target=load_model, daemon=True).start()
 
     port = int(os.environ.get("PORT", 10000))
+    print("[TrafficVision] Server booting... model loading in background")
     socketio.run(app, host="0.0.0.0", port=port)
