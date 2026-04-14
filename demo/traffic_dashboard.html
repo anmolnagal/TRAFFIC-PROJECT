@@ -1376,10 +1376,10 @@
             <canvas id="splitChart"></canvas>
           </div>
           <div class="chart-legend" style="justify-content:center; margin-top:10px;">
-            <div class="legend-item"><span class="legend-dot" style="background:#00c8ff;"></span>Car 61%</div>
-            <div class="legend-item"><span class="legend-dot" style="background:#ffab00;"></span>Truck 18%</div>
-            <div class="legend-item"><span class="legend-dot" style="background:#a78bfa;"></span>Bus 9%</div>
-            <div class="legend-item"><span class="legend-dot" style="background:#00e676;"></span>Bike 12%</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#00c8ff;"></span><span id="split-legend-car">Car —</span></div>
+            <div class="legend-item"><span class="legend-dot" style="background:#ffab00;"></span><span id="split-legend-truck">Truck —</span></div>
+            <div class="legend-item"><span class="legend-dot" style="background:#a78bfa;"></span><span id="split-legend-bus">Bus —</span></div>
+            <div class="legend-item"><span class="legend-dot" style="background:#00e676;"></span><span id="split-legend-bike">Bike —</span></div>
           </div>
         </div>
       </div>
@@ -1443,7 +1443,8 @@
       <div class="card">
         <div class="card-header">
           <div class="card-title"><span class="card-title-dot"></span>Primary View — <span id="live-cam-label">WEBCAM</span></div>
-          <div style="display:flex;gap:8px;">
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input id="webcam-source-input" class="stream-input" type="text" placeholder="Camera index (0,1,2) or RTSP URL" value="0" style="height:32px;width:220px;font-size:11px;"/>
             <button class="btn btn-primary" id="webcam-start-btn" onclick="startWebcam()" style="padding:5px 12px;font-size:12px;">▶ Start Webcam</button>
             <button class="btn" id="webcam-stop-btn" onclick="stopWebcam()" style="color:var(--accent-red);border-color:rgba(255,71,87,0.3);display:none;">⏹ Stop</button>
             <button class="btn" style="color:var(--accent-red);border-color:rgba(255,71,87,0.3);" id="rec-btn" onclick="toggleRec()">● REC</button>
@@ -1457,13 +1458,13 @@
             <div class="corner-bl"></div><div class="corner-br"></div>
             <div class="feed-overlay-top">
               <div class="feed-badge"><div class="feed-badge-dot"></div>LIVE</div>
-              <div class="feed-cam-id">CAM-03 · ZONE-C · MAIN JUNCTION</div>
+              <div class="feed-cam-id" id="feed-cam-id">WEBCAM · LOCAL</div>
             </div>
             <div class="feed-overlay-bottom">
               <div class="feed-stats">
-                <div class="feed-stat-pill" id="feed-count">Vehicles: 7</div>
-                <div class="feed-stat-pill" id="feed-fps">FPS: 30</div>
-                <div class="feed-stat-pill" id="feed-conf">Avg Conf: 89%</div>
+                <div class="feed-stat-pill" id="feed-count">Vehicles: —</div>
+                <div class="feed-stat-pill" id="feed-fps">FPS: —</div>
+                <div class="feed-stat-pill" id="feed-conf">Avg Conf: —</div>
               </div>
               <div class="feed-timestamp" id="feed-time">00:00:00</div>
             </div>
@@ -1476,7 +1477,7 @@
         <div class="card">
           <div class="card-header">
             <div class="card-title"><span class="card-title-dot"></span>Camera Network</div>
-            <span style="font-family:var(--font-mono);font-size:10px;color:var(--accent-green);">5 ONLINE · 1 OFFLINE</span>
+            <span style="font-family:var(--font-mono);font-size:10px;color:var(--accent-green);" id="cam-network-status">— ONLINE · — OFFLINE</span>
           </div>
           <div class="camera-grid">
             <div class="cam-thumb selected" onclick="selectCam(0)"><canvas id="camThumb0"></canvas><div class="cam-label">CAM-03 · Zone C</div><div class="cam-status live"></div></div>
@@ -1529,13 +1530,30 @@
               <div class="upload-sub">MP4, AVI, MOV, MKV · Max 2GB</div>
             </div>
             <input type="file" id="fileIn" accept="video/*" style="display:none;" onchange="handleFileSelect(event)">
-            <!-- Video preview player shown after file is selected -->
-            <video id="video-preview" controls
-                   style="display:none;width:100%;margin-top:12px;border-radius:8px;
-                          border:1px solid var(--border-accent);background:#000;max-height:280px;"
-                   preload="metadata">
-              Your browser does not support the video element.
-            </video>
+
+            <!-- Live detection canvas — shown once streaming starts -->
+            <div id="video-stream-wrap" style="display:none;margin-top:14px;position:relative;background:#010810;border-radius:8px;border:1px solid var(--border-accent);overflow:hidden;">
+              <canvas id="videoStreamCanvas" style="width:100%;display:block;"></canvas>
+              <!-- top badges -->
+              <div style="position:absolute;top:8px;left:8px;display:flex;gap:6px;align-items:center;">
+                <div id="vs-badge-live" style="background:rgba(255,71,87,0.85);color:white;font-size:10px;font-family:var(--font-mono);font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:4px;display:flex;align-items:center;gap:5px;">
+                  <div style="width:5px;height:5px;border-radius:50%;background:white;animation:pulse 1.5s infinite;"></div>LIVE
+                </div>
+                <div id="vs-badge-frame" style="font-family:var(--font-mono);font-size:10px;color:rgba(255,255,255,0.6);padding:2px 8px;background:rgba(0,0,0,0.55);border-radius:4px;">Frame 0/0</div>
+              </div>
+              <!-- progress bar at bottom edge -->
+              <div style="position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(0,0,0,0.4);">
+                <div id="vs-progress-fill" style="height:100%;background:linear-gradient(90deg,var(--accent-cyan),var(--accent-green));width:0%;transition:width 0.1s;"></div>
+              </div>
+              <!-- bottom stats row -->
+              <div style="position:absolute;bottom:8px;left:8px;right:8px;display:flex;justify-content:space-between;align-items:center;">
+                <div style="display:flex;gap:6px;">
+                  <div id="vs-stat-count" style="background:rgba(0,0,0,0.7);border:1px solid rgba(0,200,255,0.3);padding:3px 9px;border-radius:20px;font-family:var(--font-mono);font-size:10px;color:var(--accent-cyan);">Vehicles: 0</div>
+                  <div id="vs-stat-conf"  style="background:rgba(0,0,0,0.7);border:1px solid rgba(0,200,255,0.3);padding:3px 9px;border-radius:20px;font-family:var(--font-mono);font-size:10px;color:var(--accent-cyan);">Conf: &mdash;</div>
+                </div>
+                <button onclick="stopVideoStream()" style="font-family:var(--font-mono);font-size:10px;color:var(--accent-red);background:rgba(0,0,0,0.7);border:1px solid rgba(255,71,87,0.4);padding:3px 10px;border-radius:20px;cursor:pointer;">&#9209; Stop</button>
+              </div>
+            </div>
           </div>
 
           <div id="upload-panel-image" style="display:none;">
@@ -1721,15 +1739,8 @@
         </table>
       </div>
       <div class="pagination">
-        <div class="pagination-info">Showing 1–20 of 4,821 detections</div>
-        <div class="pagination-btns">
-          <button class="pg-btn">‹</button>
-          <button class="pg-btn active">1</button>
-          <button class="pg-btn">2</button>
-          <button class="pg-btn">3</button>
-          <button class="pg-btn">…</button>
-          <button class="pg-btn">241</button>
-          <button class="pg-btn">›</button>
+        <div class="pagination-info" id="pagination-info-text">No detections recorded yet</div>
+        <div class="pagination-btns" id="pagination-btns">
         </div>
       </div>
     </div>
@@ -2168,16 +2179,29 @@ function loadStats() {
         trafficChartRef.update();
       }
 
-      // Update Split Donut chart (Distribution)
+      // Update Split Donut chart (Distribution) and legend
       if (typeof splitChartRef !== 'undefined' && d.class_totals) {
-        // We only show top 4 major classes in the donut for layout
         const majorClasses = ['car', 'truck', 'bus', 'motorcycle', 'two_wheeler', 'pedestrian'];
         const counts = majorClasses.map(c => d.class_totals[c] || 0);
-        
-        // Match standard colors: cyan, amber, purple, green, white, blue
+        const grandTotal = counts.reduce((a,b) => a+b, 0) || 1;
         splitChartRef.data.labels = ['Car', 'Truck', 'Bus', 'Motorbike', 'Cycle/2W', 'Pedestrian'];
         splitChartRef.data.datasets[0].data = counts;
         splitChartRef.update();
+        // Update legend
+        const carPct  = Math.round((d.class_totals.car||0)/grandTotal*100);
+        const truckPct= Math.round(((d.class_totals.truck||0))/grandTotal*100);
+        const busPct  = Math.round((d.class_totals.bus||0)/grandTotal*100);
+        const bikePct = Math.round(((d.class_totals.motorcycle||0)+(d.class_totals.two_wheeler||0))/grandTotal*100);
+        const lCar  = document.getElementById('split-legend-car');
+        const lTruck= document.getElementById('split-legend-truck');
+        const lBus  = document.getElementById('split-legend-bus');
+        const lBike = document.getElementById('split-legend-bike');
+        if (grandTotal > 1) {
+          if (lCar)   lCar.textContent   = `Car ${carPct}%`;
+          if (lTruck) lTruck.textContent = `Truck ${truckPct}%`;
+          if (lBus)   lBus.textContent   = `Bus ${busPct}%`;
+          if (lBike)  lBike.textContent  = `Bike ${bikePct}%`;
+        }
       }
 
       // Update Live Bar Chart (Current scene)
@@ -2209,8 +2233,8 @@ function loadFullLog(page = 1) {
     .then(r => r.json())
     .then(d => {
       const tbody = document.getElementById('log-full-body');
-      const pageInfo = document.querySelector('.pagination-info');
-      const pageBtns = document.querySelector('.pagination-btns');
+      const pageInfo = document.getElementById('pagination-info-text');
+      const pageBtns = document.getElementById('pagination-btns');
       
       if (!tbody) return;
 
@@ -2313,7 +2337,10 @@ socket.on('webcam_started', d => {
   document.getElementById('webcam-start-btn').style.display = 'none';
   document.getElementById('webcam-stop-btn').style.display  = '';
   document.getElementById('live-cam-label').textContent = (d.label || 'WEBCAM') + ' · LIVE';
+  document.getElementById('feed-cam-id').textContent = (d.label || 'WEBCAM') + ' · LIVE';
   document.getElementById('feed-count').textContent = 'Vehicles: 0';
+  document.getElementById('feed-fps').textContent = 'FPS: ~20';
+  document.getElementById('feed-conf').textContent = 'Avg Conf: —';
 });
 
 socket.on('webcam_stopped', () => {
@@ -2321,20 +2348,45 @@ socket.on('webcam_stopped', () => {
   document.getElementById('webcam-start-btn').style.display = '';
   document.getElementById('webcam-stop-btn').style.display  = 'none';
   document.getElementById('live-cam-label').textContent = 'WEBCAM';
-  // Draw placeholder
+  document.getElementById('feed-cam-id').textContent = 'WEBCAM · LOCAL';
+  document.getElementById('feed-count').textContent = 'Vehicles: —';
+  document.getElementById('feed-fps').textContent = 'FPS: —';
+  document.getElementById('feed-conf').textContent = 'Avg Conf: —';
   drawPlaceholderCanvas();
 });
 
 socket.on('webcam_error', d => {
-  alert('Webcam error: ' + d.error);
   webcamRunning = false;
   document.getElementById('webcam-start-btn').style.display = '';
   document.getElementById('webcam-stop-btn').style.display  = 'none';
+  // Show a helpful in-canvas error instead of a browser alert
+  const canvas = document.getElementById('liveCanvas');
+  if (canvas) {
+    const ctx = canvas.getContext('2d');
+    canvas.width  = canvas.offsetWidth  || 640;
+    canvas.height = canvas.offsetHeight || 360;
+    ctx.fillStyle = '#010810';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'rgba(255,71,87,0.8)';
+    ctx.font = '600 15px IBM Plex Mono';
+    ctx.textAlign = 'center';
+    ctx.fillText('⚠ Camera Error', canvas.width/2, canvas.height/2 - 30);
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '12px IBM Plex Mono';
+    ctx.fillText(d.error, canvas.width/2, canvas.height/2);
+    ctx.fillStyle = 'rgba(0,200,255,0.4)';
+    ctx.font = '11px IBM Plex Mono';
+    ctx.fillText('Try: Enter 0, 1, 2 for camera index, or an RTSP/HTTP URL above', canvas.width/2, canvas.height/2 + 28);
+    ctx.textAlign = 'left';
+  }
 });
 
 function startWebcam() {
   if (webcamRunning) return;
-  socket.emit('start_webcam', {index: 0});
+  const rawSource = (document.getElementById('webcam-source-input')?.value || '0').trim();
+  // Pass as number if it's a digit string, else as URL
+  const source = /^\d+$/.test(rawSource) ? parseInt(rawSource, 10) : rawSource;
+  socket.emit('start_webcam', {index: source});
 }
 
 function stopWebcam() {
@@ -2409,6 +2461,117 @@ function startLiveFeed() {
 }
 
 
+/* ── Video Stream: SocketIO handlers ── */
+const _vsImg = new Image();
+
+socket.on('video_stream_started', () => {
+  console.log('[TV] Video stream started');
+  document.getElementById('progress-bar').style.width = '35%';
+  document.getElementById('progress-label').textContent = 'Streaming live annotated frames…';
+  document.getElementById('prog-eta').textContent = 'Streaming';
+});
+
+socket.on('video_frame', data => {
+  // Draw on canvas
+  _vsImg.onload = () => {
+    const canvas = document.getElementById('videoStreamCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(_vsImg, 0, 0, canvas.width, canvas.height);
+  };
+  _vsImg.src = 'data:image/jpeg;base64,' + data.image;
+
+  // Update overlays
+  const frameEl = document.getElementById('vs-badge-frame');
+  if (frameEl) frameEl.textContent = `Frame ${data.frame}/${data.total}`;
+
+  const fill = document.getElementById('vs-progress-fill');
+  if (fill) fill.style.width = data.progress + '%';
+
+  const cntEl = document.getElementById('vs-stat-count');
+  if (cntEl) cntEl.textContent = `Vehicles: ${data.count}`;
+
+  const confEl = document.getElementById('vs-stat-conf');
+  if (confEl) confEl.textContent = data.avg_conf > 0 ? `Conf: ${data.avg_conf}%` : 'Conf: —';
+
+  // Progress panel
+  document.getElementById('prog-frames').textContent = `${data.frame} / ${data.total}`;
+  document.getElementById('prog-detected').textContent = data.count;
+  if (data.avg_conf > 0) document.getElementById('prog-conf').textContent = data.avg_conf + '%';
+
+  // Progress bar follows video progress
+  const pb = document.getElementById('progress-bar');
+  if (pb) pb.style.width = Math.max(35, data.progress) + '%';
+});
+
+socket.on('video_stream_done', d => {
+  console.log('[TV] Video stream done', d);
+  document.getElementById('progress-bar').style.width = '100%';
+  document.getElementById('progress-label').textContent = `Stream Complete ✓ — ${d.total_detections} detections across ${d.frames_processed} frames`;
+  document.getElementById('prog-detected').textContent = d.total_detections;
+  document.getElementById('prog-conf').textContent = d.avg_conf + '%';
+  document.getElementById('prog-eta').textContent = 'Done';
+
+  const frameEl = document.getElementById('vs-badge-frame');
+  if (frameEl) frameEl.textContent = `Done — ${d.frames_processed} frames`;
+  const fill = document.getElementById('vs-progress-fill');
+  if (fill) fill.style.width = '100%';
+
+  // Show class breakdown result card
+  const colorMap = {car:'var(--accent-cyan)',truck:'var(--accent-amber)',bus:'var(--accent-purple)',
+                    motorcycle:'var(--accent-green)',auto:'#ff9f43',
+                    pedestrian:'#ff6fb0',bicycle:'#a0f0ff',tempo:'#fd79a8',
+                    tractor:'#e17055',van:'#74b9ff'};
+  const list = document.getElementById('result-class-list');
+  if (list) {
+    list.innerHTML = '';
+    Object.entries(d.class_counts || {}).sort((a,b)=>b[1]-a[1]).forEach(([cls,cnt]) => {
+      const col = colorMap[cls] || 'var(--text-secondary)';
+      list.innerHTML += `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;
+                     background:var(--bg-surface);border-radius:6px;border:1px solid var(--border);">
+          <span class="class-tag ${cls}" style="font-size:12px;">${cls.charAt(0).toUpperCase()+cls.slice(1)}</span>
+          <span style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:${col};">×${cnt}</span>
+        </div>`;
+    });
+  }
+  const summaryEl = document.getElementById('result-summary');
+  if (summaryEl) summaryEl.textContent = `${d.total_detections} detection(s) across ${d.frames_processed} frames · Avg conf ${d.avg_conf}%`;
+
+  const imgEl = document.getElementById('result-img');
+  if (imgEl) imgEl.style.display = 'none';
+  const metaEl = document.getElementById('result-video-meta');
+  if (metaEl) metaEl.style.display = 'none';
+  document.getElementById('result-output-label').textContent = 'LIVE STREAM RESULT';
+  document.getElementById('detection-result-card').style.display = '';
+
+  // Re-enable run button
+  const btn = document.getElementById('run-analysis-btn');
+  if (btn) { btn.disabled = false; btn.textContent = '▶ RUN ANALYSIS'; }
+  setTimeout(loadStats, 500);
+});
+
+socket.on('video_stream_error', d => {
+  console.error('[TV] Video stream error:', d.error);
+  document.getElementById('progress-label').textContent = '✗ Stream error: ' + d.error;
+  document.getElementById('progress-bar').style.width = '100%';
+  document.getElementById('progress-bar').style.background = 'var(--accent-red)';
+  const btn = document.getElementById('run-analysis-btn');
+  if (btn) { btn.disabled = false; btn.textContent = '▶ RUN ANALYSIS'; }
+});
+
+socket.on('video_stream_stopped', () => {
+  console.log('[TV] Video stream stopped');
+  document.getElementById('progress-label').textContent = 'Stream stopped by user.';
+  const btn = document.getElementById('run-analysis-btn');
+  if (btn) { btn.disabled = false; btn.textContent = '▶ RUN ANALYSIS'; }
+});
+
+function stopVideoStream() {
+  socket.emit('stop_video_stream');
+}
+
+
 /* ── UPLOAD & ANALYZE: Real YOLO detection ── */
 let selectedFile = null;
 
@@ -2419,22 +2582,11 @@ function handleFileSelect(e) {
   document.getElementById('file-selected-info').style.display = '';
   document.getElementById('file-name').textContent = f.name;
   document.getElementById('file-meta').textContent = `${(f.size/1024/1024).toFixed(1)} MB · ${f.type || 'unknown'}`;
-  // Hide previous result
+  // Hide previous results / stream canvas
   document.getElementById('detection-result-card').style.display = 'none';
   document.getElementById('analysis-progress').style.display = 'none';
-
-  // Show video preview if it's a video file
-  const videoPreview = document.getElementById('video-preview');
-  if (videoPreview) {
-    if (f.type.startsWith('video/')) {
-      const url = URL.createObjectURL(f);
-      videoPreview.src = url;
-      videoPreview.style.display = 'block';
-    } else {
-      videoPreview.style.display = 'none';
-      videoPreview.src = '';
-    }
-  }
+  const wrap = document.getElementById('video-stream-wrap');
+  if (wrap) wrap.style.display = 'none';
 }
 
 function handleDrop(event, inputId) {
@@ -2485,81 +2637,42 @@ function startAnalysis() {
   formData.append('conf', (confVal / 100).toFixed(2));
 
   if (isVideo) {
-    // ── VIDEO: real frame-sampled detection ──────────────────────────────
-    // Animate progress bar indeterminately while backend processes
-    let fakeP = 5;
-    const fakeIntvl = setInterval(() => {
-      fakeP = Math.min(90, fakeP + 1);
-      document.getElementById('progress-bar').style.width = fakeP + '%';
-    }, 800);
+    // ── VIDEO: two-step — upload then stream annotated frames live ────────
+    const confFloat = (confVal / 100).toFixed(2);
 
-    document.getElementById('progress-label').textContent = 'Sampling frames & running YOLO (this may take a minute)…';
+    document.getElementById('progress-label').textContent = 'Uploading video…';
+    document.getElementById('progress-bar').style.width = '10%';
 
-    fetch('/api/detect-video', { method: 'POST', body: formData })
+    fetch('/api/upload-video-stream', { method: 'POST', body: formData })
       .then(r => r.json())
-      .then(d => {
-        clearInterval(fakeIntvl);
-        if (d.error) throw new Error(d.error);
+      .then(meta => {
+        if (meta.error) throw new Error(meta.error);
 
-        document.getElementById('progress-bar').style.width = '100%';
-        document.getElementById('progress-label').textContent = 'Video Analysis Complete ✓';
-        document.getElementById('prog-frames').textContent = `${d.frames_analysed} / ${d.total_frames}`;
-        document.getElementById('prog-detected').textContent = d.total_detections;
-        document.getElementById('prog-conf').textContent = d.avg_conf + '%';
-        document.getElementById('prog-eta').textContent = 'Done';
+        document.getElementById('progress-bar').style.width = '30%';
+        document.getElementById('progress-label').textContent =
+          `Uploaded (${meta.duration_sec}s · ${meta.fps} fps) — starting live stream…`;
+        document.getElementById('prog-frames').textContent = `0 / ${meta.total_frames}`;
 
-        // Show annotated best-frame thumbnail
-        document.getElementById('result-output-label').textContent = 'BEST DETECTION FRAME';
-        const imgEl = document.getElementById('result-img');
-        if (d.thumbnail) {
-          imgEl.src = 'data:image/jpeg;base64,' + d.thumbnail;
-          imgEl.style.display = 'block';
-        } else {
-          imgEl.style.display = 'none';
-        }
+        // Show the live canvas area
+        const wrap = document.getElementById('video-stream-wrap');
+        wrap.style.display = '';
 
-        // Video metadata pills
-        const metaEl = document.getElementById('result-video-meta');
-        if (metaEl) {
-          metaEl.style.display = 'flex';
-          const pillStyle = 'background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);';
-          metaEl.innerHTML = [
-            `<span style="${pillStyle}">⏱ ${d.duration_sec}s</span>`,
-            `<span style="${pillStyle}">🎞 ${d.fps} fps</span>`,
-            `<span style="${pillStyle}">🔍 ${d.frames_analysed} frames sampled</span>`,
-          ].join('');
-        }
+        // Initialise canvas to native resolution
+        const canvas = document.getElementById('videoStreamCanvas');
+        canvas.width  = 640;
+        canvas.height = 360;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#010810';
+        ctx.fillRect(0, 0, 640, 360);
 
-        document.getElementById('result-summary').textContent =
-          `${d.total_detections} detection(s) across ${d.frames_analysed} frames · Avg conf ${d.avg_conf}%`;
-
-        // Class breakdown
-        const list = document.getElementById('result-class-list');
-        list.innerHTML = '';
-        const colorMap = {car:'var(--accent-cyan)',truck:'var(--accent-amber)',bus:'var(--accent-purple)',
-                          motorcycle:'var(--accent-green)',auto:'#ff9f43',
-                          pedestrian:'#ff6fb0',bicycle:'#a0f0ff',tempo:'#fd79a8',
-                          tractor:'#e17055',van:'#74b9ff'};
-        Object.entries(d.class_counts || {}).sort((a,b)=>b[1]-a[1]).forEach(([cls, cnt]) => {
-          const col = colorMap[cls] || 'var(--text-secondary)';
-          list.innerHTML += `
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;
-                         background:var(--bg-surface);border-radius:6px;border:1px solid var(--border);">
-              <span class="class-tag ${cls}" style="font-size:12px;">${cls.charAt(0).toUpperCase()+cls.slice(1)}</span>
-              <span style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:${col};">×${cnt}</span>
-            </div>`;
-        });
-
-        resultCard.style.display = '';
-        setTimeout(loadStats, 500);
+        // Ask backend to start pushing frames
+        socket.emit('start_video_stream', { conf: confFloat });
+        // Note: btn re-enabled by video_stream_done / video_stream_error handlers
       })
       .catch(err => {
-        clearInterval(fakeIntvl);
-        document.getElementById('progress-label').textContent = '✗ Error: ' + err.message;
+        document.getElementById('progress-label').textContent = '✗ Upload error: ' + err.message;
         document.getElementById('progress-bar').style.width = '100%';
         document.getElementById('progress-bar').style.background = 'var(--accent-red)';
-      })
-      .finally(() => {
         btn.disabled = false;
         btn.textContent = '▶ RUN ANALYSIS';
       });

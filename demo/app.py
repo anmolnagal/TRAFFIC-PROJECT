@@ -96,6 +96,12 @@ webcam_active   = False
 webcam_cap      = None
 webcam_thread   = None
 
+# Video-stream state
+video_stream_active = False
+video_stream_thread = None
+video_stream_sid    = None   # SocketIO session that requested the stream
+_video_tmp_path     = None   # temp file currently queued for streaming
+
 # Cumulative stats
 total_detections   = 0
 detection_log      = deque(maxlen=1000)   # last 1000 detections
@@ -118,7 +124,9 @@ def load_model():
             model_is_custom = True
             model_name      = "indian_vehicles_yolo.pt (Custom)"
             model_loading   = False
+            # ── Diagnostic: print class names ────────────────────────────────
             print(f"[TrafficVision] ✓ Custom model loaded: {model_name}")
+            print(f"[TrafficVision]   Classes ({len(mdl.names)}): {dict(mdl.names)}")
             socketio.emit("model_ready", {"name": model_name, "custom": True}, namespace="/")
         else:
             # ── Fall back to COCO pretrained ────────────────────────────────
@@ -142,8 +150,9 @@ def load_model():
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def parse_results(results_raw):
+def parse_results(results_raw, debug=False):
     bboxes, classes, confs = [], [], []
+    raw_count = len(results_raw.boxes) if results_raw.boxes is not None else 0
     for box in results_raw.boxes:
         cls_id = int(box.cls[0])
         conf   = float(box.conf[0])
@@ -153,12 +162,16 @@ def parse_results(results_raw):
             name = results_raw.names.get(cls_id, f"class_{cls_id}")
         else:
             if cls_id not in COCO_TO_INDIAN:
+                if debug:
+                    print(f"[DEBUG] Skipping COCO class {cls_id} ({results_raw.names.get(cls_id,'?')}) conf={conf:.2f}")
                 continue
             name = COCO_TO_INDIAN[cls_id]
 
         bboxes.append([x1, y1, x2, y2])
         classes.append(name)
         confs.append(round(conf, 3))
+    if debug and raw_count > 0:
+        print(f"[DEBUG] parse_results: raw={raw_count} kept={len(bboxes)} custom={model_is_custom}")
     return bboxes, classes, confs
 
 
@@ -414,6 +427,172 @@ def api_detect_video():
             os.unlink(tmp_path)
         except OSError:
             pass
+
+
+# ── HTTP: upload a video to be streamed frame-by-frame ───────────────────────
+
+@app.route("/api/upload-video-stream", methods=["POST"])
+def api_upload_video_stream():
+    """
+    Receives an uploaded video file, saves to a temp path, and returns
+    the temp-file token so the client can request live streaming via SocketIO.
+    """
+    if model_loading:
+        return jsonify({"error": "Model still loading, please wait"}), 503
+    if yolo_model is None:
+        return jsonify({"error": "Model not available"}), 503
+
+    global _video_tmp_path
+
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"error": "No file provided"}), 400
+
+    import tempfile
+    suffix = os.path.splitext(file.filename or "video.mp4")[1] or ".mp4"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp_path = tmp.name
+        file.save(tmp_path)
+
+    # Clean up any previous temp file
+    if _video_tmp_path and os.path.exists(_video_tmp_path):
+        try:
+            os.unlink(_video_tmp_path)
+        except OSError:
+            pass
+    _video_tmp_path = tmp_path
+
+    # Quick metadata
+    cap = cv2.VideoCapture(tmp_path)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+    cap.release()
+
+    return jsonify({
+        "ok": True,
+        "total_frames": total_frames,
+        "fps": round(fps, 1),
+        "duration_sec": round(total_frames / fps, 1),
+    })
+
+
+# ── WebSocket: live video-file streaming ─────────────────────────────────────
+
+def video_stream_worker(tmp_path, conf_thresh, sid):
+    global video_stream_active
+
+    cap = cv2.VideoCapture(tmp_path)
+    if not cap.isOpened():
+        socketio.emit("video_stream_error", {"error": "Cannot open video"}, to=sid)
+        video_stream_active = False
+        return
+
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
+    fps          = cap.get(cv2.CAP_PROP_FPS) or 25.0
+    frame_delay  = 1.0 / max(fps, 1)      # target inter-frame delay
+
+    # Run inference every N frames (CPU-friendly); annotate every frame
+    INFER_EVERY  = 3
+    frame_idx    = 0
+    last_boxes, last_classes, last_confs = [], [], []
+    all_classes, all_confs = [], []
+
+    t_next = time.time()
+
+    while video_stream_active:
+        ok, frame = cap.read()
+        if not ok:
+            break
+
+        frame_idx += 1
+        progress = round(frame_idx / total_frames * 100, 1)
+
+        # Run YOLO every INFER_EVERY frames
+        if frame_idx % INFER_EVERY == 1:
+            try:
+                debug_this = (frame_idx <= INFER_EVERY * 3)   # log first 3 inference frames
+                res = yolo_model(frame, conf=conf_thresh, verbose=False, imgsz=640)[0]
+                last_boxes, last_classes, last_confs = parse_results(res, debug=debug_this)
+                if last_classes:
+                    all_classes.extend(last_classes)
+                    all_confs.extend(last_confs)
+            except Exception as e:
+                print(f"[TrafficVision] Inference error frame {frame_idx}: {e}")
+
+        # Draw boxes on every frame
+        annotated = draw_cv(frame.copy(), last_boxes, last_classes, last_confs)
+        b64 = frame_to_b64(annotated, quality=60)
+
+        avg_conf = round(sum(last_confs) / len(last_confs) * 100, 1) if last_confs else 0.0
+
+        socketio.emit("video_frame", {
+            "image":       b64,
+            "frame":       frame_idx,
+            "total":       total_frames,
+            "progress":    progress,
+            "count":       len(last_boxes),
+            "avg_conf":    avg_conf,
+            "classes":     last_classes,
+            "class_counts": dict(Counter(last_classes)),
+        }, to=sid)
+
+        # Throttle to approximate real-time playback
+        t_next += frame_delay
+        sleep = t_next - time.time()
+        if sleep > 0:
+            time.sleep(sleep)
+
+    cap.release()
+
+    # Final summary
+    total_det = len(all_classes)
+    avg_c     = round(sum(all_confs) / len(all_confs) * 100, 1) if all_confs else 0
+    if all_classes:
+        record_detections(all_classes, all_confs, source="video_stream")
+
+    socketio.emit("video_stream_done", {
+        "total_detections": total_det,
+        "frames_processed": frame_idx,
+        "avg_conf":         avg_c,
+        "class_counts":     dict(Counter(all_classes)),
+    }, to=sid)
+    video_stream_active = False
+    print(f"[TrafficVision] Video stream completed — {frame_idx} frames, {total_det} detections")
+
+
+@socketio.on("start_video_stream")
+def on_start_video_stream(data=None):
+    global video_stream_active, video_stream_thread, video_stream_sid
+
+    if video_stream_active:
+        emit("video_stream_error", {"error": "A video stream is already running"})
+        return
+    if yolo_model is None:
+        emit("video_stream_error", {"error": "Model not loaded yet"})
+        return
+    if not _video_tmp_path or not os.path.exists(_video_tmp_path):
+        emit("video_stream_error", {"error": "No video uploaded. Please upload first."})
+        return
+
+    conf_thresh = float((data or {}).get("conf", 0.15))   # lower threshold for small custom model
+    video_stream_sid    = request.sid
+    video_stream_active = True
+    video_stream_thread = threading.Thread(
+        target=video_stream_worker,
+        args=(_video_tmp_path, conf_thresh, video_stream_sid),
+        daemon=True,
+    )
+    video_stream_thread.start()
+    emit("video_stream_started", {})
+    print(f"[TrafficVision] Video stream started for SID={video_stream_sid}")
+
+
+@socketio.on("stop_video_stream")
+def on_stop_video_stream(data=None):
+    global video_stream_active
+    video_stream_active = False
+    emit("video_stream_stopped", {})
+    print("[TrafficVision] Video stream stop requested")
 
 
 # ── WebSocket: webcam stream ──────────────────────────────────────────────────
