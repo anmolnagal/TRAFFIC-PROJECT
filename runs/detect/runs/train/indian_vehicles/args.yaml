@@ -1,10 +1,10 @@
 task: detect
 mode: train
-model: c:\Users\Rahul Dev\OneDrive\Desktop\Traffic_Project\TRAFFIC-PROJECT\yolov8n.pt
-data: c:\Users\Rahul Dev\OneDrive\Desktop\Traffic_Project\TRAFFIC-PROJECT\configs\indian_vehicles.yaml
-epochs: 60
+model: C:\Users\Rahul Dev\OneDrive\Desktop\Traffic_Project\TRAFFIC-PROJECT\yolov8n.pt
+data: C:\Users\Rahul Dev\OneDrive\Desktop\Traffic_Project\TRAFFIC-PROJECT\configs\indian_vehicles.yaml
+epochs: 80
 time: null
-patience: 20
+patience: 25
 batch: 4
 imgsz: 640
 save: true
@@ -75,7 +75,7 @@ lr0: 0.01
 lrf: 0.01
 momentum: 0.937
 weight_decay: 0.0005
-warmup_epochs: 5
+warmup_epochs: 3
 warmup_momentum: 0.8
 warmup_bias_lr: 0.1
 box: 7.5
@@ -91,16 +91,16 @@ hsv_s: 0.7
 hsv_v: 0.4
 degrees: 10.0
 translate: 0.15
-scale: 0.6
+scale: 0.5
 shear: 2.0
 perspective: 0.0005
 flipud: 0.0
 fliplr: 0.5
 bgr: 0.0
 mosaic: 1.0
-mixup: 0.15
+mixup: 0.1
 cutmix: 0.0
-copy_paste: 0.3
+copy_paste: 0.2
 copy_paste_mode: flip
 auto_augment: randaugment
 erasing: 0.4

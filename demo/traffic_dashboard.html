@@ -1529,6 +1529,13 @@
               <div class="upload-sub">MP4, AVI, MOV, MKV · Max 2GB</div>
             </div>
             <input type="file" id="fileIn" accept="video/*" style="display:none;" onchange="handleFileSelect(event)">
+            <!-- Video preview player shown after file is selected -->
+            <video id="video-preview" controls
+                   style="display:none;width:100%;margin-top:12px;border-radius:8px;
+                          border:1px solid var(--border-accent);background:#000;max-height:280px;"
+                   preload="metadata">
+              Your browser does not support the video element.
+            </video>
           </div>
 
           <div id="upload-panel-image" style="display:none;">
@@ -1666,9 +1673,12 @@
       </div>
       <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:14px;padding:14px;">
         <div>
-          <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);letter-spacing:1px;margin-bottom:8px;">ANNOTATED OUTPUT</div>
+          <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);letter-spacing:1px;margin-bottom:8px;" id="result-output-label">ANNOTATED OUTPUT</div>
+          <!-- For images: annotated still. For video: best-frame thumbnail -->
           <img id="result-img" src="" alt="Detection result"
                style="width:100%;border-radius:8px;border:1px solid var(--border);display:block;">
+          <!-- Video meta shown below thumbnail for video analysis -->
+          <div id="result-video-meta" style="display:none;margin-top:10px;display:flex;gap:12px;flex-wrap:wrap;"></div>
         </div>
         <div>
           <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);letter-spacing:1px;margin-bottom:8px;">CLASS BREAKDOWN</div>
@@ -2411,6 +2421,20 @@ function handleFileSelect(e) {
   document.getElementById('file-meta').textContent = `${(f.size/1024/1024).toFixed(1)} MB · ${f.type || 'unknown'}`;
   // Hide previous result
   document.getElementById('detection-result-card').style.display = 'none';
+  document.getElementById('analysis-progress').style.display = 'none';
+
+  // Show video preview if it's a video file
+  const videoPreview = document.getElementById('video-preview');
+  if (videoPreview) {
+    if (f.type.startsWith('video/')) {
+      const url = URL.createObjectURL(f);
+      videoPreview.src = url;
+      videoPreview.style.display = 'block';
+    } else {
+      videoPreview.style.display = 'none';
+      videoPreview.src = '';
+    }
+  }
 }
 
 function handleDrop(event, inputId) {
@@ -2418,7 +2442,6 @@ function handleDrop(event, inputId) {
   const f = event.dataTransfer.files[0];
   if (!f) return;
   const input = document.getElementById(inputId);
-  // Create a DataTransfer and assign
   const dt = new DataTransfer();
   dt.items.add(f);
   input.files = dt.files;
@@ -2431,8 +2454,13 @@ function startAnalysis() {
     return;
   }
 
-  // Check it's an image (video analysis not yet supported via REST)
+  const isVideo = selectedFile.type.startsWith('video/');
   const isImage = selectedFile.type.startsWith('image/');
+
+  if (!isVideo && !isImage) {
+    alert('Unsupported file type. Please upload a video (MP4, AVI, MOV) or image (JPG, PNG).');
+    return;
+  }
 
   const panel = document.getElementById('analysis-progress');
   const resultCard = document.getElementById('detection-result-card');
@@ -2440,100 +2468,155 @@ function startAnalysis() {
   resultCard.style.display = 'none';
 
   document.getElementById('progress-bar').style.width = '0%';
-  document.getElementById('progress-label').textContent = 'Uploading…';
+  document.getElementById('progress-bar').style.background = 'linear-gradient(90deg,var(--accent-cyan),var(--accent-green))';
+  document.getElementById('progress-label').textContent = isVideo ? 'Uploading video…' : 'Uploading image…';
   document.getElementById('prog-frames').textContent = '—';
   document.getElementById('prog-detected').textContent = '—';
   document.getElementById('prog-conf').textContent = '—';
-  document.getElementById('prog-eta').textContent = '—';
+  document.getElementById('prog-eta').textContent = isVideo ? 'Processing…' : '—';
 
   const btn = document.getElementById('run-analysis-btn');
   btn.disabled = true;
-  btn.textContent = '⏳ Processing…';
-
-  if (!isImage) {
-    // Video: simulate progress (real frame-by-frame not yet supported via HTTP)
-    simulateVideoProgress();
-    return;
-  }
-
-  // Animate progress bar to 40% while uploading
-  document.getElementById('progress-bar').style.width = '40%';
-  document.getElementById('progress-label').textContent = 'Running YOLO inference…';
+  btn.textContent = isVideo ? '⏳ Analysing video…' : '⏳ Processing…';
 
   const confVal = parseInt(document.getElementById('confRange').value || 50);
   const formData = new FormData();
   formData.append('file', selectedFile);
   formData.append('conf', (confVal / 100).toFixed(2));
 
-  fetch('/api/detect', { method: 'POST', body: formData })
-    .then(r => r.json())
-    .then(d => {
-      if (d.error) throw new Error(d.error);
+  if (isVideo) {
+    // ── VIDEO: real frame-sampled detection ──────────────────────────────
+    // Animate progress bar indeterminately while backend processes
+    let fakeP = 5;
+    const fakeIntvl = setInterval(() => {
+      fakeP = Math.min(90, fakeP + 1);
+      document.getElementById('progress-bar').style.width = fakeP + '%';
+    }, 800);
 
-      // Complete progress bar
-      document.getElementById('progress-bar').style.width = '100%';
-      document.getElementById('progress-label').textContent = 'Analysis Complete ✓';
-      document.getElementById('prog-frames').textContent = '1';
-      document.getElementById('prog-detected').textContent = d.count;
-      document.getElementById('prog-conf').textContent = d.avg_conf + '%';
-      document.getElementById('prog-eta').textContent = 'Done';
+    document.getElementById('progress-label').textContent = 'Sampling frames & running YOLO (this may take a minute)…';
 
-      // Show annotated image
-      document.getElementById('result-img').src = 'data:image/jpeg;base64,' + d.image;
-      document.getElementById('result-summary').textContent = `${d.count} vehicle(s) detected · Avg conf ${d.avg_conf}%`;
+    fetch('/api/detect-video', { method: 'POST', body: formData })
+      .then(r => r.json())
+      .then(d => {
+        clearInterval(fakeIntvl);
+        if (d.error) throw new Error(d.error);
 
-      // Build class breakdown list
-      const list = document.getElementById('result-class-list');
-      list.innerHTML = '';
-      Object.entries(d.class_counts || {}).sort((a,b)=>b[1]-a[1]).forEach(([cls, cnt]) => {
+        document.getElementById('progress-bar').style.width = '100%';
+        document.getElementById('progress-label').textContent = 'Video Analysis Complete ✓';
+        document.getElementById('prog-frames').textContent = `${d.frames_analysed} / ${d.total_frames}`;
+        document.getElementById('prog-detected').textContent = d.total_detections;
+        document.getElementById('prog-conf').textContent = d.avg_conf + '%';
+        document.getElementById('prog-eta').textContent = 'Done';
+
+        // Show annotated best-frame thumbnail
+        document.getElementById('result-output-label').textContent = 'BEST DETECTION FRAME';
+        const imgEl = document.getElementById('result-img');
+        if (d.thumbnail) {
+          imgEl.src = 'data:image/jpeg;base64,' + d.thumbnail;
+          imgEl.style.display = 'block';
+        } else {
+          imgEl.style.display = 'none';
+        }
+
+        // Video metadata pills
+        const metaEl = document.getElementById('result-video-meta');
+        if (metaEl) {
+          metaEl.style.display = 'flex';
+          const pillStyle = 'background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);';
+          metaEl.innerHTML = [
+            `<span style="${pillStyle}">⏱ ${d.duration_sec}s</span>`,
+            `<span style="${pillStyle}">🎞 ${d.fps} fps</span>`,
+            `<span style="${pillStyle}">🔍 ${d.frames_analysed} frames sampled</span>`,
+          ].join('');
+        }
+
+        document.getElementById('result-summary').textContent =
+          `${d.total_detections} detection(s) across ${d.frames_analysed} frames · Avg conf ${d.avg_conf}%`;
+
+        // Class breakdown
+        const list = document.getElementById('result-class-list');
+        list.innerHTML = '';
         const colorMap = {car:'var(--accent-cyan)',truck:'var(--accent-amber)',bus:'var(--accent-purple)',
-                          motorbike:'var(--accent-green)',two_wheeler:'var(--accent-green)',
-                          pedestrian:'#ff6fb0',bicycle:'#a0f0ff'};
-        const col = colorMap[cls] || 'var(--text-secondary)';
-        list.innerHTML += `
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;
-                       background:var(--bg-surface);border-radius:6px;border:1px solid var(--border);">
-            <span class="class-tag ${cls}" style="font-size:12px;">${cls.charAt(0).toUpperCase()+cls.slice(1)}</span>
-            <span style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:${col};">×${cnt}</span>
-          </div>`;
+                          motorcycle:'var(--accent-green)',auto:'#ff9f43',
+                          pedestrian:'#ff6fb0',bicycle:'#a0f0ff',tempo:'#fd79a8',
+                          tractor:'#e17055',van:'#74b9ff'};
+        Object.entries(d.class_counts || {}).sort((a,b)=>b[1]-a[1]).forEach(([cls, cnt]) => {
+          const col = colorMap[cls] || 'var(--text-secondary)';
+          list.innerHTML += `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;
+                         background:var(--bg-surface);border-radius:6px;border:1px solid var(--border);">
+              <span class="class-tag ${cls}" style="font-size:12px;">${cls.charAt(0).toUpperCase()+cls.slice(1)}</span>
+              <span style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:${col};">×${cnt}</span>
+            </div>`;
+        });
+
+        resultCard.style.display = '';
+        setTimeout(loadStats, 500);
+      })
+      .catch(err => {
+        clearInterval(fakeIntvl);
+        document.getElementById('progress-label').textContent = '✗ Error: ' + err.message;
+        document.getElementById('progress-bar').style.width = '100%';
+        document.getElementById('progress-bar').style.background = 'var(--accent-red)';
+      })
+      .finally(() => {
+        btn.disabled = false;
+        btn.textContent = '▶ RUN ANALYSIS';
       });
 
-      resultCard.style.display = '';
+  } else {
+    // ── IMAGE: existing single-frame detection ───────────────────────────
+    document.getElementById('progress-bar').style.width = '40%';
+    document.getElementById('progress-label').textContent = 'Running YOLO inference…';
 
-      // Reload stats to update KPIs
-      setTimeout(loadStats, 500);
-    })
-    .catch(err => {
-      document.getElementById('progress-label').textContent = 'Error: ' + err.message;
-      document.getElementById('progress-bar').style.width = '100%';
-      document.getElementById('progress-bar').style.background = 'var(--accent-red)';
-    })
-    .finally(() => {
-      btn.disabled = false;
-      btn.textContent = '▶ RUN ANALYSIS';
-    });
-}
+    fetch('/api/detect', { method: 'POST', body: formData })
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) throw new Error(d.error);
 
-let progInt = null;
-function simulateVideoProgress() {
-  // Fallback simulation for videos (full video analysis would require server-side streaming)
-  let p = 0;
-  clearInterval(progInt);
-  document.getElementById('prog-eta').textContent = '~';
-  document.getElementById('progress-label').textContent = 'Note: Full video analysis runs via python demo/app.py pipeline';
-  progInt = setInterval(() => {
-    p = Math.min(100, p + (Math.floor(Math.random() * 3) + 1));
-    document.getElementById('progress-bar').style.width = p+'%';
-    document.getElementById('prog-frames').textContent = Math.round(p*2);
-    document.getElementById('prog-detected').textContent = Math.round(p*1.2);
-    document.getElementById('prog-conf').textContent = Math.round(78+p*0.12)+'%';
-    if (p>=100) {
-      clearInterval(progInt);
-      document.getElementById('progress-label').textContent = 'Simulation Complete — Upload an image for real detection';
-      document.getElementById('run-analysis-btn').disabled = false;
-      document.getElementById('run-analysis-btn').textContent = '▶ RUN ANALYSIS';
-    }
-  }, 120);
+        document.getElementById('progress-bar').style.width = '100%';
+        document.getElementById('progress-label').textContent = 'Analysis Complete ✓';
+        document.getElementById('prog-frames').textContent = '1';
+        document.getElementById('prog-detected').textContent = d.count;
+        document.getElementById('prog-conf').textContent = d.avg_conf + '%';
+        document.getElementById('prog-eta').textContent = 'Done';
+
+        document.getElementById('result-output-label').textContent = 'ANNOTATED OUTPUT';
+        document.getElementById('result-img').src = 'data:image/jpeg;base64,' + d.image;
+        document.getElementById('result-img').style.display = 'block';
+        const metaEl = document.getElementById('result-video-meta');
+        if (metaEl) metaEl.style.display = 'none';
+        document.getElementById('result-summary').textContent = `${d.count} vehicle(s) detected · Avg conf ${d.avg_conf}%`;
+
+        const list = document.getElementById('result-class-list');
+        list.innerHTML = '';
+        const colorMap = {car:'var(--accent-cyan)',truck:'var(--accent-amber)',bus:'var(--accent-purple)',
+                          motorcycle:'var(--accent-green)',auto:'#ff9f43',
+                          pedestrian:'#ff6fb0',bicycle:'#a0f0ff',tempo:'#fd79a8',
+                          tractor:'#e17055',van:'#74b9ff'};
+        Object.entries(d.class_counts || {}).sort((a,b)=>b[1]-a[1]).forEach(([cls, cnt]) => {
+          const col = colorMap[cls] || 'var(--text-secondary)';
+          list.innerHTML += `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;
+                         background:var(--bg-surface);border-radius:6px;border:1px solid var(--border);">
+              <span class="class-tag ${cls}" style="font-size:12px;">${cls.charAt(0).toUpperCase()+cls.slice(1)}</span>
+              <span style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:${col};">×${cnt}</span>
+            </div>`;
+        });
+
+        resultCard.style.display = '';
+        setTimeout(loadStats, 500);
+      })
+      .catch(err => {
+        document.getElementById('progress-label').textContent = '✗ Error: ' + err.message;
+        document.getElementById('progress-bar').style.width = '100%';
+        document.getElementById('progress-bar').style.background = 'var(--accent-red)';
+      })
+      .finally(() => {
+        btn.disabled = false;
+        btn.textContent = '▶ RUN ANALYSIS';
+      });
+  }
 }
 
 

@@ -108,19 +108,31 @@ _load_persisted()
 def load_model():
     global yolo_model, model_is_custom, model_name, model_loading
     try:
-        print("[TrafficVision] Starting model download...")
         from ultralytics import YOLO
-        
-        # Force download yolov8n.pt to current directory
-        print("[TrafficVision] Downloading yolov8n.pt...")
-        mdl = YOLO("yolov8n.pt")
-        
-        yolo_model      = mdl
-        model_is_custom = False
-        model_name      = "yolov8n.pt (COCO)"
-        model_loading   = False
-        print(f"[TrafficVision] ✓ Model loaded successfully: {model_name}")
-        socketio.emit("model_ready", {"name": model_name, "custom": False}, namespace="/")
+
+        # ── Try the custom fine-tuned model first ───────────────────────────
+        if os.path.exists(CUSTOM_MODEL):
+            print(f"[TrafficVision] Loading custom model: {CUSTOM_MODEL}")
+            mdl             = YOLO(CUSTOM_MODEL)
+            yolo_model      = mdl
+            model_is_custom = True
+            model_name      = "indian_vehicles_yolo.pt (Custom)"
+            model_loading   = False
+            print(f"[TrafficVision] ✓ Custom model loaded: {model_name}")
+            socketio.emit("model_ready", {"name": model_name, "custom": True}, namespace="/")
+        else:
+            # ── Fall back to COCO pretrained ────────────────────────────────
+            print(f"[TrafficVision] Custom model not found at {CUSTOM_MODEL}")
+            print("[TrafficVision] Falling back to yolov8n.pt (COCO pretrained)")
+            print("[TrafficVision] → Run  python src/train_yolo.py  to generate the custom model.")
+            mdl             = YOLO(FALLBACK_MODEL)
+            yolo_model      = mdl
+            model_is_custom = False
+            model_name      = "yolov8n.pt (COCO fallback)"
+            model_loading   = False
+            print(f"[TrafficVision] ✓ Fallback model loaded: {model_name}")
+            socketio.emit("model_ready", {"name": model_name, "custom": False}, namespace="/")
+
     except Exception as exc:
         model_loading = False
         print(f"[TrafficVision] ✗ Model load error: {exc}")
@@ -300,6 +312,108 @@ def api_detect():
         })
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/detect-video", methods=["POST"])
+def api_detect_video():
+    """
+    Accept an uploaded video file, sample every SAMPLE_EVERY frames,
+    run YOLO on each sampled frame, and return aggregate results plus
+    an annotated thumbnail of the frame with the most detections.
+    """
+    if model_loading:
+        return jsonify({"error": "Model still loading, please wait"}), 503
+    if yolo_model is None:
+        return jsonify({"error": "Model not available"}), 503
+
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"error": "No file provided"}), 400
+
+    conf_thresh = float(request.form.get("conf", 0.25))
+    SAMPLE_EVERY = 10       # analyse every 10th frame (CPU-friendly)
+    MAX_FRAMES   = 300      # hard cap: never process more than 300 samples
+
+    # Write video to a temp file so OpenCV can open it
+    import tempfile
+    suffix = os.path.splitext(file.filename or "video.mp4")[1] or ".mp4"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp_path = tmp.name
+        file.save(tmp_path)
+
+    try:
+        cap = cv2.VideoCapture(tmp_path)
+        if not cap.isOpened():
+            return jsonify({"error": "Could not open video file"}), 400
+
+        total_frames  = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps           = cap.get(cv2.CAP_PROP_FPS) or 25.0
+        duration_sec  = round(total_frames / fps, 1)
+
+        all_classes   = []
+        all_confs     = []
+        class_totals  = Counter()
+        frames_analysed = 0
+
+        best_frame        = None   # annotated frame with most detections
+        best_count        = -1
+
+        frame_idx = 0
+        while frames_analysed < MAX_FRAMES:
+            ok, frame = cap.read()
+            if not ok:
+                break
+
+            frame_idx += 1
+            if frame_idx % SAMPLE_EVERY != 0:
+                continue
+
+            try:
+                res = yolo_model(frame, conf=conf_thresh, verbose=False, imgsz=416)[0]
+                bboxes, classes, confs = parse_results(res)
+            except Exception:
+                continue
+
+            all_classes.extend(classes)
+            all_confs.extend(confs)
+            class_totals.update(classes)
+            frames_analysed += 1
+
+            if len(bboxes) > best_count:
+                best_count = len(bboxes)
+                best_frame = draw_cv(frame.copy(), bboxes, classes, confs)
+
+        cap.release()
+
+        # Record to global log
+        if all_classes:
+            record_detections(all_classes, all_confs,
+                              source=file.filename or "video", bboxes=[])
+
+        avg_conf = round(sum(all_confs) / len(all_confs) * 100, 1) if all_confs else 0
+
+        thumb_b64 = ""
+        if best_frame is not None:
+            thumb_b64 = frame_to_b64(best_frame, quality=82)
+
+        return jsonify({
+            "total_detections": len(all_classes),
+            "frames_analysed":  frames_analysed,
+            "total_frames":     total_frames,
+            "duration_sec":     duration_sec,
+            "fps":              round(fps, 1),
+            "avg_conf":         avg_conf,
+            "class_counts":     dict(class_totals),
+            "thumbnail":        thumb_b64,   # most-populated annotated frame
+        })
+
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
 
 
 # ── WebSocket: webcam stream ──────────────────────────────────────────────────

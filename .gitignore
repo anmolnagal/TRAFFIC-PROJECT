@@ -52,6 +52,7 @@ models/*.pt
 models/*.pth
 models/*.pkl
 !models/.gitkeep
+!models/indian_vehicles_yolo.pt
 
 # Project Temporary Files
 temp_frame.jpg

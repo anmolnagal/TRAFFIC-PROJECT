@@ -1,148 +1,154 @@
 """
 train_yolo.py
 =============
-Fine-tunes YOLOv8n on the Indian Vehicles dataset.
+Fine-tunes YOLOv8n on the merged Indian Vehicles + Congestion dataset.
 
-Run from project root:
-  python src/train_yolo.py
+Run from project root AFTER running src/prepare_dataset.py:
+    python src/train_yolo.py
 
 Output:
-  models/indian_vehicles_yolo.pt   ← best weights (copy here after training)
-  runs/train/indian_vehicles/      ← full training run artefacts
+    models/indian_vehicles_yolo.pt   ← best weights copied here
+    runs/train/indian_vehicles/      ← full training artefacts
 """
 
 import os
 import sys
 import shutil
+from pathlib import Path
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+ROOT = Path(__file__).resolve().parent.parent
 os.chdir(ROOT)
 
 import torch
 from ultralytics import YOLO
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-DATA_YAML   = os.path.join(ROOT, "configs", "indian_vehicles.yaml")
-BASE_MODEL  = os.path.join(ROOT, "yolov8n.pt")
-OUTPUT_MODEL = os.path.join(ROOT, "models", "indian_vehicles_yolo.pt")
+DATA_YAML    = ROOT / "configs" / "indian_vehicles.yaml"
+BASE_MODEL   = ROOT / "yolov8n.pt"
+OUTPUT_MODEL = ROOT / "models" / "indian_vehicles_yolo.pt"
 
-# ── Training hyper-params ────────────────────────────────────────────────────
-EPOCHS    = 60         # enough for 26-image dataset; early-stop will kick in
-IMG_SIZE  = 640
-BATCH     = 4          # small dataset → small batch; avoids memory issues on Intel Xe
-PATIENCE  = 20         # wait longer before early-stopping (small dataset oscillates)
-WORKERS   = 0         # Intel Xe / Windows: must be 0
+# ── Training hyper-params ─────────────────────────────────────────────────────
+EPOCHS   = 80          # more data → more epochs; early-stop handles over-training
+IMG_SIZE = 640
+BATCH    = 4           # CPU-safe; small batch is fine for our dataset size
+PATIENCE = 25          # early-stop patience
+WORKERS  = 0           # Windows + Intel Iris Xe: must be 0
 
-# ── Device ───────────────────────────────────────────────────────────────────
-# Intel Iris Xe is an integrated GPU with no CUDA support.
-# PyTorch will use CPU — still fast enough for 26-60 images.
+# Intel Iris Xe has no CUDA → force CPU
 DEVICE = "cpu"
 
 
-def check_data():
-    if not os.path.exists(DATA_YAML):
+def check_data() -> int:
+    if not DATA_YAML.exists():
         sys.exit(
             "❌  configs/indian_vehicles.yaml not found!\n"
-            "    Run  python src/download_datasets.py  first."
+            "    Run  python src/prepare_dataset.py  first."
         )
+
     import yaml
-    with open(DATA_YAML) as f:
+    with open(DATA_YAML, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
-    data_path = cfg.get("path", "data")
+
+    data_path = Path(cfg.get("path", str(ROOT / "data")))
     train_rel = cfg.get("train", "train/images")
-    train_dir = os.path.join(data_path, train_rel) if not os.path.isabs(train_rel) else train_rel
-    if not os.path.isdir(train_dir):
+    train_dir = (data_path / train_rel) if not Path(train_rel).is_absolute() else Path(train_rel)
+
+    if not train_dir.is_dir():
         sys.exit(
             f"❌  Training images not found at {train_dir}\n"
-            "    Run  python src/download_datasets.py  first."
+            "    Run  python src/prepare_dataset.py  first."
         )
-    imgs = [f for f in os.listdir(train_dir) if f.lower().endswith((".jpg", ".png", ".jpeg"))]
+
+    imgs = list(train_dir.glob("*"))
+    imgs = [f for f in imgs if f.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".bmp"}]
     print(f"✅  Found {len(imgs)} training images in {train_dir}")
     return len(imgs)
 
 
 def train():
     n_imgs = check_data()
-    device_label = f"GPU ({torch.cuda.get_device_name(0)})" if DEVICE == "0" else "CPU"
-    print(f"\n🚀  Starting YOLOv8n fine-tune")
-    print(f"    Device  : {device_label}")
-    print(f"    Images  : {n_imgs}")
-    print(f"    Epochs  : {EPOCHS}  (patience={PATIENCE})")
-    print(f"    Config  : {DATA_YAML}")
 
-    model = YOLO(BASE_MODEL)
+    print(f"\n🚀  Starting YOLOv8n fine-tune")
+    print(f"    Device   : CPU (Intel Iris Xe — CUDA not available)")
+    print(f"    Images   : {n_imgs}  training")
+    print(f"    Epochs   : {EPOCHS}  (early-stop patience={PATIENCE})")
+    print(f"    Batch    : {BATCH}")
+    print(f"    Config   : {DATA_YAML}")
+    print(f"    Base     : {BASE_MODEL}\n")
+
+    model = YOLO(str(BASE_MODEL))
 
     results = model.train(
-        data      = DATA_YAML,
-        epochs    = EPOCHS,
-        imgsz     = IMG_SIZE,
-        batch     = BATCH,
-        device    = DEVICE,
-        patience  = PATIENCE,
-        workers   = WORKERS,
-        project   = "runs/train",
-        name      = "indian_vehicles",
-        exist_ok  = True,
-        plots     = True,
-        verbose   = True,
+        data     = str(DATA_YAML),
+        epochs   = EPOCHS,
+        imgsz    = IMG_SIZE,
+        batch    = BATCH,
+        device   = DEVICE,
+        patience = PATIENCE,
+        workers  = WORKERS,
+        project  = "runs/train",
+        name     = "indian_vehicles",
+        exist_ok = True,
+        plots    = True,
+        verbose  = True,
 
-        # ── Augmentation — heavy to compensate for small dataset ──────────────
-        # Colour / lighting (handles dusk, night, mixed artificial light)
-        hsv_h     = 0.020,   # hue shift
-        hsv_s     = 0.70,    # saturation jitter
-        hsv_v     = 0.40,    # brightness jitter
+        # ── Augmentation ──────────────────────────────────────────────────────
+        # Colour / lighting jitter
+        hsv_h       = 0.020,
+        hsv_s       = 0.70,
+        hsv_v       = 0.40,
 
-        # Geometry (handles elevated camera angle, different perspectives)
-        degrees   = 10.0,    # rotation ± 10°
-        translate = 0.15,    # shift ± 15 %
-        scale     = 0.6,     # zoom ± 60 %
-        shear     = 2.0,     # slight shear
-        perspective = 0.0005, # perspective warp (simulates different angles)
-        flipud    = 0.0,     # don't flip upside-down (vehicles should be right-way up)
-        fliplr    = 0.5,     # horizontal flip — fine for traffic
+        # Geometry (simulates different camera angles, elevations)
+        degrees     = 10.0,
+        translate   = 0.15,
+        scale       = 0.5,
+        shear       = 2.0,
+        perspective = 0.0005,
+        flipud      = 0.0,
+        fliplr      = 0.5,
 
-        # Scene-level augmentation (critical for congestion simulation)
-        mosaic    = 1.0,     # always use mosaic (combines 4 images → dense scene)
-        mixup     = 0.15,    # slightly blend two images
-        copy_paste = 0.30,   # copy vehicle instances and paste into other images
-                             # ↑ artificially increases vehicle density in training
+        # Scene-level augmentation
+        mosaic      = 1.0,
+        mixup       = 0.10,
+        copy_paste  = 0.20,
 
-        # Training schedule
-        warmup_epochs = 5,   # warm up LR for first 5 epochs
-        close_mosaic  = 10,  # turn off mosaic for last 10 epochs for stability
-        lr0       = 0.01,
-        lrf       = 0.01,
-        weight_decay = 0.0005,
+        # Schedule
+        warmup_epochs = 3,
+        close_mosaic  = 10,
+        lr0           = 0.01,
+        lrf           = 0.01,
+        weight_decay  = 0.0005,
     )
 
-    # YOLO may save to runs/train/ or runs/detect/train/ depending on version
-    # Try both locations
+    # ── Copy best weights to models/ ──────────────────────────────────────────
+    run_dir = Path("runs/train/indian_vehicles")
     candidates = [
-        os.path.join(ROOT, "runs", "train",  "indian_vehicles", "weights", "best.pt"),
-        os.path.join(ROOT, "runs", "detect", "runs", "train", "indian_vehicles", "weights", "best.pt"),
-        os.path.join(ROOT, "runs", "detect", "train", "weights", "best.pt"),
-        os.path.join(ROOT, "runs", "detect", "train2", "weights", "best.pt"),
+        run_dir / "weights" / "best.pt",
+        ROOT / "runs" / "train" / "indian_vehicles" / "weights" / "best.pt",
+        ROOT / "runs" / "detect" / "train"  / "weights" / "best.pt",
     ]
-    best_weights = next((p for p in candidates if os.path.exists(p)), None)
+    best_weights = next((p for p in candidates if p.exists()), None)
 
     if best_weights:
-        os.makedirs(os.path.join(ROOT, "models"), exist_ok=True)
+        OUTPUT_MODEL.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(best_weights, OUTPUT_MODEL)
-        print(f"\n✅  Best model saved to: {OUTPUT_MODEL}")
-        print(f"    (copied from: {best_weights})")
+        print(f"\n✅  Best model saved → {OUTPUT_MODEL}")
+        print(f"    (copied from {best_weights})")
     else:
-        print(f"⚠️   Could not find best.pt — check runs/train/indian_vehicles/weights/")
+        print("⚠️  Could not find best.pt — check runs/train/indian_vehicles/weights/")
 
-    # Print summary metrics
+    # ── Print metrics ──────────────────────────────────────────────────────────
     try:
         metrics = results.results_dict
         print(f"\n📊  Final Metrics:")
-        print(f"    mAP50   : {metrics.get('metrics/mAP50(B)', 0):.4f}")
-        print(f"    mAP50-95: {metrics.get('metrics/mAP50-95(B)', 0):.4f}")
+        print(f"    mAP50    : {metrics.get('metrics/mAP50(B)', 0):.4f}")
+        print(f"    mAP50-95 : {metrics.get('metrics/mAP50-95(B)', 0):.4f}")
         print(f"    Precision: {metrics.get('metrics/precision(B)', 0):.4f}")
         print(f"    Recall   : {metrics.get('metrics/recall(B)', 0):.4f}")
     except Exception:
         pass
+
+    print("\n🎉  Training complete!  Run:  python demo/app.py")
 
 
 if __name__ == "__main__":
