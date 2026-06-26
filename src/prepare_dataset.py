@@ -7,6 +7,7 @@ train/ and valid/ splits.
 
 Run from project root:
     python src/prepare_dataset.py
+    #NEEDGUI
 """
 
 import os
