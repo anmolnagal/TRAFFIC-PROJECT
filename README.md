@@ -17,7 +17,7 @@
 
 ---
 
-## 📌 Project Overview
+##  Project Overview
 Accurate detection and classification of vehicles in real-world traffic scenes remain challenging due to varying illumination, occlusions, motion blur, and complex backgrounds. 
 
 This project proposes a **hybrid computer vision framework** that combines:
